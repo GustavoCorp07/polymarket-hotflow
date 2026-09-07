@@ -1,0 +1,41 @@
+{
+  "schema": "hotflow.backtest.v1",
+  "mode": "backtest",
+  "note": "Book then an explicit feed gap. Later decisions must skip DATA_GAP.",
+  "as_of": "2026-04-01T00:00:00Z",
+  "fees": {
+    "enabled": true,
+    "rate": 0.04,
+    "exponent": 1.0,
+    "taker_only": true,
+    "source": "clob_fee_rate_dated_as_of_2026-04-01",
+    "as_of": "2026-04-01T00:00:00Z",
+    "fetched_at": "2026-04-01T00:00:00Z"
+  },
+  "market": {"kind": "demo_crypto", "hot": true, "market_id": "bt-gap"},
+  "events": [
+    {
+      "ts": "2026-04-01T00:00:00Z",
+      "kind": "book",
+      "payload": {
+        "bids": [[0.40, 90.0], [0.38, 100.0]],
+        "asks": [[0.42, 80.0], [0.44, 120.0]]
+      }
+    },
+    {
+      "ts": "2026-04-01T00:00:05Z",
+      "kind": "decision",
+      "payload": {"p_info": 0.70}
+    },
+    {
+      "ts": "2026-04-01T00:00:06Z",
+      "kind": "gap",
+      "payload": {"reason": "feed_disconnect"}
+    },
+    {
+      "ts": "2026-04-01T00:00:10Z",
+      "kind": "decision",
+      "payload": {"p_info": 0.70}
+    }
+  ]
+}

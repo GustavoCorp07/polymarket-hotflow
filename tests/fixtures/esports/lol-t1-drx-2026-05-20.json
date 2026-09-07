@@ -1,0 +1,22 @@
+{
+  "id": "2268716",
+  "conditionId": "0x8e3fd307c78495c7557d7daebebf2100956b3c9225b8006dff67f0d15b04dbed",
+  "slug": "lol-t1-drx-2026-05-20",
+  "question": "LoL: T1 vs Kiwoom DRX (BO3) - LCK Rounds 1-2",
+  "description": "This market refers to the LoL match between T1 and Kiwoom DRX in the LCK Rounds 1-2, initially scheduled for May 20 at 4:00AM ET.\n\nThis market will resolve to \"T1\" if T1 win the match against Kiwoom DRX.\n\nThis market will resolve to \"Kiwoom DRX\" if Kiwoom DRX win the match against T1.\n\nIf the match is canceled (not played at all), ends in a tie, or is delayed beyond 7 days from the scheduled date without a winner determined, this market will resolve to 50-50. \n\nIf the match begins but is not completed, and one team wins due to the opponent's forfeiture, disqualification, or walkover, this market will resolve to the team who wins. \n\nIf the match ends in a forfeit, disqualification, or walkover (team withdraws before the start and the other wins automatically), this market will resolve to 50-50. \n\nThe resolution source for this market will be official information from https://gol.gg/esports/home. However, if https://gol.gg/esports/home has not published final results within 2 hours after the event’s conclusion, a consensus of credible reporting may be used instead including video evidence.\n\nIn cases where a team’s listed name includes minor discrepancies from the resolution source, this market will resolve based on the underlying real-world match rather than exact name matching. Recognizable abbreviations, alternate or erroneous spellings, sponsor tags, affiliate or academy designations, regional identifiers, and minor formatting differences will be treated as referring to the same team, provided the intended team can be clearly and uniquely identified within the relevant competition. If a listed team name has no reasonable connection to any participating team, or if it matches or could reasonably refer to another team in the same competition such that the intended team cannot be unambiguously determined, this market will resolve 50-50.",
+  "resolutionSource": "https://gol.gg/esports/home",
+  "endDate": "2026-05-20T14:00:00Z",
+  "closed": true,
+  "active": true,
+  "groupItemTitle": "Match Winner",
+  "sportsMarketType": "moneyline",
+  "outcomes": [
+    "T1",
+    "Kiwoom DRX"
+  ],
+  "tags": [
+    "esports",
+    "lol"
+  ],
+  "collected_from": "gamma GET /markets/2268716"
+}

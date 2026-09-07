@@ -1,0 +1,20 @@
+{
+  "id": "693580",
+  "conditionId": "0x12e576af65661a45fba86fc4b40d10adb1fb8b5e2455f2c42593b96b9ae4911a",
+  "slug": "will-kt-rolster-win-the-lck-2026-season-playoffs",
+  "question": "Will KT Rolster win the LCK 2026 season playoffs?",
+  "description": "This market will resolve according to the winner of the League of Legends Champions Korea (LCK) 2026 season playoffs.\n\nIf the 2026 LCK season is postponed after December 31, 2026 11:59 PM ET, canceled, or a winner has not been declared in this timeframe, this market will resolve to “Other”.\n\nIf multiple teams are declared winner, this market will resolve in favor of the team whose listed team name comes first alphabetically.\n\nThe resolution source for this market will be official information from Riot Games (https://lolesports.com/); however, a consensus of credible reporting may also be used.",
+  "endDate": "2026-12-31T00:00:00Z",
+  "closed": true,
+  "active": true,
+  "groupItemTitle": "KT Rolster",
+  "outcomes": [
+    "Yes",
+    "No"
+  ],
+  "tags": [
+    "esports",
+    "lol"
+  ],
+  "collected_from": "gamma GET /markets/693580"
+}

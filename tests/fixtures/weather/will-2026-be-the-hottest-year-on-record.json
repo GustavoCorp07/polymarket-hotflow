@@ -1,0 +1,16 @@
+{
+  "id": "678686",
+  "conditionId": "0xe67f4d31f0eba1b009b49d7a7739b2a5f53a2d7d979a0902b465a510492c33bb",
+  "slug": "will-2026-be-the-hottest-year-on-record",
+  "question": "Will 2026 be the hottest year on record?",
+  "description": "This market will resolve according to the numerical rank of how hot 2026 is when compared against all other years for which the Global Land-Ocean Temperature Index has data.\n\nYears will be ranked in descending order, starting with the hottest as number 1, the second hottest as number 2, etc.\n\nIf 2026 ties with any other year, it will resolve according to the place the year it ties with occupies.\n\nThis market will resolve immediately once the specified data becomes available, regardless of whether the figure for the relevant years is later revised.\n\nThe primary resolution source for this market will be the figure found in the table titled \"Land-Ocean Temperature Index (C)\" under the column \"No_Smoothing\" in the row \"2026\" (https://data.giss.nasa.gov/gistemp/graphs/graph_data/Global_Mean_Estimates_based_on_Land_and_Ocean_Data/graph.txt). If NASA's \"Global Temperature Index\" is rendered permanently unavailable, other information from NASA may be used. If no information for 2026 is provided by NASA by March 1, 2027, 11:59 PM ET, this market will resolve based on a consensus of credible reporting.",
+  "endDate": "2026-12-31T00:00:00Z",
+  "closed": false,
+  "active": true,
+  "groupItemTitle": "1",
+  "outcomes": [
+    "Yes",
+    "No"
+  ],
+  "collected_from": "gamma GET /markets/678686"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "536506",
+  "conditionId": "0x1cbd54e271e0928fcb3a117b131ed73920dd4482be6c5da31f3c234168dbb177",
+  "slug": "pgl-bucharest-falcons-vs-faze",
+  "question": "PGL Bucharest: Falcons vs. FaZe",
+  "description": "Falcons and FaZe are scheduled to play each other in a semi-final matchup in the 2025 PGL Bucharest Tournament on April 12, 2025, at 7:00 AM ET.\n\nThis market will resolve to “Falcons” if Falcons advance against FaZe in the semi-finals of the PGL Bucharest Tournament.\n\nThis market will resolve to “FaZe” if FaZe advances against Falcons in the semi-finals of the PGL Bucharest Tournament.\n\nIf the match ends in a tie, is canceled, or delayed beyond May 28, 2025, this market will resolve to 50-50.\n\nThe resolution source for this market will be official information from the PGL (https://www.pglesports.com/cs2/pgl-bucharest-2025/).",
+  "endDate": "2025-04-12T12:00:00Z",
+  "closed": true,
+  "active": true,
+  "outcomes": [
+    "Falcons",
+    "FaZe"
+  ],
+  "tags": [
+    "esports",
+    "cs2"
+  ],
+  "collected_from": "gamma GET /markets/536506"
+}

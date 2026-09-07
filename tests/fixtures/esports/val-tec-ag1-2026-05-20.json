@@ -1,0 +1,22 @@
+{
+  "id": "2308640",
+  "conditionId": "0x56fb9e01abfe73b6974201ca45defe391a37f43cb53292d7ae9c4d2aca312fe4",
+  "slug": "val-tec-ag1-2026-05-20",
+  "question": "Valorant: TEC Esports vs All Gamers (BO5) - Esports World Cup China Qualifier Stage 2",
+  "description": "This market refers to the Valorant Lower bracket final match between TEC Esports and All Gamers in the Esports World Cup China Qualifier Stage 2, initially scheduled for May 20 at 5:00AM ET.\n\nThis market will resolve to \"TEC Esports\" if TEC Esports win the match against All Gamers.\n\nThis market will resolve to \"All Gamers\" if All Gamers win the match against TEC Esports.\n\nIf the match is canceled (not played at all), ends in a tie, or is delayed beyond 7 days from the scheduled date without a winner determined, this market will resolve to 50-50. \n\nIf the match begins but is not completed, and one team wins due to the opponent's forfeiture, disqualification, or walkover, this market will resolve to the team who wins. \n\nIf the match ends in a forfeit, disqualification, or walkover (team withdraws before the start and the other wins automatically), this market will resolve to 50-50. \n\nThe resolution source for this market will be official information from https://vlr.gg. However, if https://vlr.gg has not published final results within 2 hours after the event’s conclusion, a consensus of credible reporting may be used instead including video evidence.\n\nIn cases where a team’s listed name includes minor discrepancies from the resolution source, this market will resolve based on the underlying real-world match rather than exact name matching. Recognizable abbreviations, alternate or erroneous spellings, sponsor tags, affiliate or academy designations, regional identifiers, and minor formatting differences will be treated as referring to the same team, provided the intended team can be clearly and uniquely identified within the relevant competition. If a listed team name has no reasonable connection to any participating team, or if it matches or could reasonably refer to another team in the same competition such that the intended team cannot be unambiguously determined, this market will resolve 50-50.",
+  "resolutionSource": "https://vlr.gg",
+  "endDate": "2026-05-20T15:10:00Z",
+  "closed": true,
+  "active": true,
+  "groupItemTitle": "Match Winner",
+  "sportsMarketType": "moneyline",
+  "outcomes": [
+    "TEC Esports",
+    "All Gamers"
+  ],
+  "tags": [
+    "esports",
+    "val"
+  ],
+  "collected_from": "gamma GET /markets/2308640"
+}

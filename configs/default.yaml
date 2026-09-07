@@ -1,0 +1,222 @@
+trading:
+  mode: paper          # backtest | paper | shadow | live
+  shadow: false        # score + persist signals, never create orders
+  session_id: local-paper
+  paper_starting_cash: 10000.0
+  paper_fill_ratio: 0.55   # simulator partial-fill fraction per ack
+  min_required_edge: 0.012
+  min_confidence: 0.35
+  signal_half_life_ms: 2000
+  categories:
+    crypto: true
+    weather: true
+    sports: true
+    esports: true
+    other: true
+
+live:
+  accept_live_trading: false
+  accept_capital_at_risk: false
+  i_understand_orders_are_real: false
+
+scanner:
+  gamma_limit: 50
+  gamma_offset: 0
+  max_markets: 40
+  require_accepting_orders: true
+  require_enable_order_book: true
+  min_liquidity: 200.0
+  min_volume_24h: 50.0
+  max_spread: 0.12
+  fetch_clob_books: true
+  fetch_clob_fees: true
+  closed: false
+  # Dynamic discovery — empty means all tags; this is not a category whitelist.
+  include_tags: []
+  exclude_closed: true
+
+hot_market:
+  min_score_to_trade: 55.0
+  weights:
+    liquidity: 0.26
+    volume: 0.20
+    spread: 0.18
+    book_open: 0.12
+    competitive: 0.08
+    persistence: 0.10
+    urgency: 0.06
+  # log10 anchors used only for 0–1 feature scaling (not exchange parameters)
+  liquidity_ref: 10000.0
+  volume_ref: 5000.0
+  max_spread_for_full_score: 0.08
+  tiers:
+    cold: 0.0
+    warm: 30.0
+    hot: 55.0
+    ultra_hot: 75.0
+
+opportunity:
+  weights:
+    expected_net_edge: 1.0
+    confidence: 1.0
+    liquidity: 1.0
+    persistence: 1.0
+    execution_probability: 1.0
+  min_score: 0.0
+
+fair_value:
+  latency_haircut: 0.0015
+  adverse_selection_haircut: 0.0020
+  fill_penalty: 0.0010
+  default_confidence: 0.55
+  crypto:
+    enabled: true
+    prior_blend: 0.35
+    twap:
+      enabled: true
+      # Never invent 30 vs 60 — window must be parsed from official market text.
+      require_parsed_window: true
+      paper_annualized_vol: 0.80   # paper heuristic only; not official settlement vol
+      min_time_remaining_s: 1.0
+
+risk:
+  max_order_notional: 250.0
+  max_market_exposure: 750.0
+  max_category_exposure: 2000.0
+  max_total_exposure: 5000.0
+  max_daily_loss: 400.0
+  max_session_loss: 250.0
+  max_drawdown: 0.12
+  max_open_orders: 8
+  max_concurrent_markets: 6
+  max_slippage: 0.03
+  max_spread: 0.10
+  max_data_age_ms: 30000   # REST snapshot age after a batch scan; WS uses feeds.*.max_data_age_ms
+  max_latency_ms: 1500
+  cooldown_ms: 1500
+  cooldown_after_losses_ms: 5000
+  runaway_reject_count: 5
+  no_martingale: true
+  max_correlated_exposure: 1500.0
+  min_liquidity: 200.0
+  min_confidence: 0.35
+
+sizing:
+  kelly_fraction: 0.10
+  max_kelly: 0.05
+  variance_floor: 0.04
+  book_frac: 0.15
+
+maker_taker:
+  maker_fill_probability: 0.35
+  maker_adverse_mult: 1.30
+
+experiment:
+  strategy_id: crypto_updown
+  version: 0.1.0
+  feature_set_version: v1
+
+feeds:
+  gamma:
+    max_data_age_ms: 30000
+    critical: false
+  clob_book:
+    max_data_age_ms: 30000
+    critical: true
+  clob_fees:
+    max_data_age_ms: 60000
+    critical: true
+  market_ws:
+    max_data_age_ms: 15000
+    critical: true
+    ping_interval_s: 10          # official CLOB market/user WS
+  user_ws:
+    max_data_age_ms: 15000
+    critical: true
+    ping_interval_s: 10
+  rtds:
+    max_data_age_ms: 10000
+    critical: false
+    ping_interval_s: 5           # official RTDS
+    live_public_client: false    # optional unauthenticated RTDS; off by default
+    subscriber_enabled: false    # do not open a socket unless explicitly enabled
+    reconnect_max_backoff_s: 30.0
+    persist_cache: false
+    cache_path: data/rtds_twap_cache.json
+    collect_seconds: 12.0
+    subscribe_symbols: []        # empty = official omit-filters, keep documented symbols
+    subscribe_windows: [30, 60]  # official lookbacks only
+  sports_ws:
+    max_data_age_ms: 15000
+    critical: false
+    # Official Sports WS: server sends text "ping" every 5s; reply "pong" within 10s.
+    ping_interval_s: 5.0
+    live_public_client: false
+    subscriber_enabled: false    # do not open a socket unless explicitly enabled
+    reconnect_max_backoff_s: 30.0
+    persist_cache: false
+    cache_path: data/sports_ws_cache.json
+    collect_seconds: 12.0
+
+ai_research:
+  base_url: https://api.moonshot.ai/v1
+  model: kimi-k3
+  reasoning_effort: high         # max reserved for hard tasks
+  hard_task_reasoning_effort: max
+  timeout_s: 120
+
+# PAPER-only weather adapter. Forecasts are features, never the official resolver.
+# There is no official Polymarket weather observation WebSocket — do not invent one.
+weather:
+  enabled: true
+  min_parse_confidence: 0.5
+  prior_blend: 0.35
+
+# PAPER-only sports adapter. Per-sport models only (NBA ≠ Soccer). Live WS default-off.
+sports:
+  enabled: true
+  min_parse_confidence: 0.5
+  prior_blend: 0.35
+  live_public_client: false
+
+# PAPER-only esports. Official Gamma text + skip-heavy per-title stubs.
+# Sports WS live client stays off — no documented esports score/economy model.
+esports:
+  enabled: true
+  min_parse_confidence: 0.5
+  prior_blend: 0.35
+  live_public_client: false
+
+# PAPER/BACKTEST replay. queue_penalty and delays are documented paper assumptions.
+# Fees come from dated fixture schedules — never hardcoded live rates.
+backtest:
+  latency_ms: 50
+  taker_delay_ms: 80
+  queue_penalty: 0.15
+  reject_on_gap: true
+  refuse_candle_only: true
+  walk_forward:
+    enabled: true
+    train_seconds: 600
+    test_seconds: 300
+    step_seconds: 300
+
+# Optional public CLOB/RTDS collect. Live is off unless `hotflow record-stream --live`.
+recorder:
+  default_seconds: 20
+  max_seconds: 180
+  poll_interval_s: 2
+  max_events: 400
+
+# Offline suggestions only. auto_apply cannot write configs/default.yaml.
+tuner:
+  auto_apply: false
+
+storage:
+  sqlite_path: data/hotflow.sqlite
+  parquet_dir: data/parquet
+  reports_dir: reports
+
+monitoring:
+  prometheus_port: 9108
+  json_logs: true

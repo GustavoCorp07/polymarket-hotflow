@@ -1,0 +1,16 @@
+# Paper-mode local stack. LIVE is not enabled by this compose file.
+services:
+  hotflow:
+    build: .
+    image: hotflow:paper
+    environment:
+      HOTFLOW_TRADING_MODE: paper
+      HOTFLOW_ACCEPT_LIVE: "0"
+      HOTFLOW_CONFIG: /app/configs/default.yaml
+    volumes:
+      - ./configs:/app/configs:ro
+      - ./reports:/app/reports
+      - ./data:/app/data
+    command: ["hotflow", "paper-run", "--cycles", "1"]
+    ports:
+      - "9108:9108"
