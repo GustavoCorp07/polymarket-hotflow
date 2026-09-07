@@ -20,7 +20,7 @@ def latest_report(directory: Path, prefixes: tuple[str, ...]) -> Path | None:
     candidates: list[Path] = []
     for path in directory.glob("*.json"):
         name = path.name
-        if name.startswith("readiness-") or name.startswith("performance-") or name.startswith("decay-"):
+        if name.startswith(("readiness-", "performance-", "decay-", "walk-forward-")):
             continue
         if any(name.startswith(prefix) for prefix in prefixes):
             candidates.append(path)

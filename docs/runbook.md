@@ -28,7 +28,8 @@ hotflow shadow --mock --news-fixtures
 hotflow paper-soak --long --target-closes 50
 hotflow performance --report reports/paper-soak-long-*.json
 hotflow decay --report reports/paper-soak-long-*.json
-pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py tests/test_weather_gamma_fixtures.py tests/test_esports.py tests/test_sports_cache.py tests/test_backtest.py tests/test_recorder.py tests/test_tuner.py tests/test_observability.py tests/test_paper_ledger.py tests/test_paper_gates.py tests/test_shadow_gates.py tests/test_failure_injection.py tests/test_live_gates.py tests/test_security_hygiene.py tests/test_readiness.py tests/test_news_engine.py tests/test_performance.py tests/test_paper_long_soak.py
+hotflow walk-forward --report reports/paper-soak-long-*.json
+pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py tests/test_weather_gamma_fixtures.py tests/test_esports.py tests/test_sports_cache.py tests/test_backtest.py tests/test_recorder.py tests/test_tuner.py tests/test_observability.py tests/test_paper_ledger.py tests/test_paper_gates.py tests/test_shadow_gates.py tests/test_failure_injection.py tests/test_live_gates.py tests/test_security_hygiene.py tests/test_readiness.py tests/test_news_engine.py tests/test_performance.py tests/test_paper_long_soak.py tests/test_walkforward.py
 pytest -q
 ```
 
@@ -182,7 +183,8 @@ It never places an order. `--fetch-public` stays off and does not scrape.
 hotflow paper-soak --long --target-closes 50   # labeled synthetic official-shape lots
 hotflow performance --report reports/paper-soak-long-*.json
 hotflow decay --report reports/paper-soak-long-*.json
-# or: python scripts/performance.py --report ...
+hotflow walk-forward --report reports/paper-soak-long-*.json
+# or: python scripts/walk_forward.py --report ...
 ```
 
 `--long` records ≥50 **explicit** FILL / MARK / FLATTEN closes (MAE/MFE/holding
@@ -203,6 +205,23 @@ earlier baseline with stderr + a lite bootstrap CI. Flags are
 
 Signal half-life buckets come from report metadata (`signal_half_life_ms`);
 otherwise `N/A`. Kimi `PERFORMANCE_ANALYST` is cold-path only.
+
+### Walk-forward / regime split (anti-overfitting)
+
+```bash
+hotflow paper-soak --long --target-closes 50
+hotflow walk-forward --report reports/paper-soak-long-*.json
+# expanding train 20 → holdout 10, step 10 (default). --rolling for a sliding train.
+```
+
+Uses **only** the closed trades already in the report. Each fold reports
+expectancy, win rate, drawdown, fees, and trade count for train and holdout.
+Holdouts of 10 are caveated (`small_sample_no_strong_conclusion`).
+`--rank-by abs_pnl` is refused. `auto_disable=false`; `live_ready` is untouched.
+
+Long-soak lots carry a **labeled synthetic** regime (`normal` first half,
+`high_volatility` second half) — not a live-vol classifier. Reports without
+regime notes get `regime_split.status=N/A`.
 
 ## Readiness rollup
 

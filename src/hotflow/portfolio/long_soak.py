@@ -29,6 +29,7 @@ class LabeledLot:
     mark_favorable: float
     close_price: float
     fee: float
+    regime: str
     origin: str = ORIGIN
 
     def as_dict(self) -> dict[str, Any]:
@@ -42,6 +43,7 @@ class LabeledLot:
             "mark_favorable": self.mark_favorable,
             "close_price": self.close_price,
             "fee": self.fee,
+            "regime": self.regime,
             "origin": self.origin,
         }
 
@@ -53,6 +55,8 @@ def labeled_round_trips(n: int = DEFAULT_TARGET_CLOSES) -> list[LabeledLot]:
     lots: list[LabeledLot] = []
     for index in range(n):
         win = index % 2 == 0
+        # Documented synthetic tag (not a live-vol classifier): first half normal, rest high_volatility.
+        regime = "normal" if index < (n + 1) // 2 else "high_volatility"
         lots.append(
             LabeledLot(
                 index=index,
@@ -64,6 +68,7 @@ def labeled_round_trips(n: int = DEFAULT_TARGET_CLOSES) -> list[LabeledLot]:
                 mark_favorable=0.44,
                 close_price=0.42 if win else 0.39,
                 fee=0.0,
+                regime=regime,
             )
         )
     return lots
@@ -117,7 +122,7 @@ def run_labeled_long_soak(
             size=lot.size,
             price=lot.close_price,
             fee=lot.fee,
-            note="long_soak_close",
+            note=f"long_soak_close regime={lot.regime}",
             kind=LedgerEventKind.FLATTEN,
             ts=t0 + timedelta(seconds=10),
         )
@@ -142,5 +147,9 @@ def run_labeled_long_soak(
             "tripped": session.pipe.kills.tripped,
             "reason": session.pipe.kills.reason.value if session.pipe.kills.reason else None,
         },
+        "regime_note": (
+            "Labeled synthetic regimes on fixture lots: first half 'normal', "
+            "second half 'high_volatility'. Not a live-vol classifier."
+        ),
         "note": "Labeled synthetic official-shape lots. Prices are fixture arguments, not venue prints.",
     }

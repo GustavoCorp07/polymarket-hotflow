@@ -101,7 +101,9 @@ Event-driven replay only. Book/trade events are required when HMS uses book
 features — candle-only fixtures are refused. Fill simulation applies documented
 paper latency, queue penalty, maker fill probability, and taker delay. Fees
 come from the dated fixture schedule via the official taker formula.
-Train / validation / OOS splits plus a walk-forward stub are reported.
+Train / validation / OOS splits plus `hotflow walk-forward` on existing
+closed trades (expanding or rolling; fold-size caveats). Do not pick a
+strategy by max absolute walk-forward PnL.
 Do not pick a strategy by max absolute backtest PnL.
 
 `hotflow tune` may suggest bounded threshold/weight changes from expectancy,

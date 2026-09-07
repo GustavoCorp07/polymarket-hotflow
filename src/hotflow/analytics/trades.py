@@ -37,6 +37,7 @@ class NormalizedTrade:
     mae: float | None = None
     mfe: float | None = None
     source: str = "unknown"
+    regime: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -50,6 +51,7 @@ class NormalizedTrade:
             "mae": self.mae,
             "mfe": self.mfe,
             "source": self.source,
+            "regime": self.regime,
         }
 
 
@@ -134,6 +136,7 @@ def _from_backtest(report: dict[str, Any]) -> TradeExtract:
                 mae=float(raw["mae"]) if raw.get("mae") is not None else None,
                 mfe=float(raw["mfe"]) if raw.get("mfe") is not None else None,
                 source="backtest",
+                regime=parse_regime(raw),
             )
         )
     notes = []
@@ -179,6 +182,19 @@ def _from_paper(report: dict[str, Any]) -> TradeExtract:
     )
 
 
+def parse_regime(raw: dict[str, Any] | None) -> str | None:
+    if not raw:
+        return None
+    labeled = raw.get("regime")
+    if labeled:
+        return str(labeled)
+    note = str(raw.get("note") or "")
+    marker = "regime="
+    if marker in note:
+        return note.split(marker, 1)[1].split()[0] or None
+    return None
+
+
 def _closed_from_events(events: list[dict[str, Any]]) -> list[NormalizedTrade]:
     opens: dict[str, dict[str, Any]] = {}
     marks: dict[str, list[tuple[datetime | None, float]]] = {}
@@ -214,6 +230,7 @@ def _closed_from_events(events: list[dict[str, Any]]) -> list[NormalizedTrade]:
                     mae=mae,
                     mfe=mfe,
                     source="paper_ledger",
+                    regime=parse_regime(event),
                 )
             )
             continue

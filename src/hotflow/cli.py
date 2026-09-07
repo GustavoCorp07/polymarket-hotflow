@@ -738,6 +738,47 @@ def failure_soak(
     )
 
 
+@app.command("walk-forward")
+def walk_forward_cmd(
+    config: Path | None = typer.Option(None, "--config", "-c"),
+    report: Path | None = typer.Option(None, "--report", help="Existing paper-soak/backtest JSON"),
+    from_reports: Path | None = typer.Option(None, "--from-reports"),
+    train_size: int = typer.Option(20, "--train-size"),
+    test_size: int = typer.Option(10, "--test-size"),
+    step: int = typer.Option(10, "--step"),
+    expanding: bool = typer.Option(True, "--expanding/--rolling"),
+    rank_by: str | None = typer.Option(None, "--rank-by", help="Refuses abs_pnl / pnl"),
+    out: Path | None = typer.Option(None, "--out"),
+) -> None:
+    """Walk-forward + optional regime split on existing closes. Suggestion-only."""
+    from hotflow.analytics.review import load_review_source
+    from hotflow.analytics.walkforward import build_walk_forward, format_walk_forward
+
+    cfg = load_config(config)
+    if cfg.trading.mode.lower() == "live":
+        raise typer.BadParameter("walk-forward refuses LIVE mode")
+    payload_in, source = load_review_source(report, from_reports)
+    if payload_in is None and report is None and from_reports is None:
+        raise typer.BadParameter("pass --report or --from-reports; will not invent trades")
+    body = build_walk_forward(
+        payload_in,
+        source=source,
+        train_size=train_size,
+        test_size=test_size,
+        step=step,
+        expanding=expanding,
+        rank_metric=rank_by,
+    )
+    target = out or Path(cfg.storage.reports_dir) / (
+        f"walk-forward-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}.json"
+    )
+    write_report(target, body)
+    typer.echo(format_walk_forward(body))
+    typer.echo(f"report={target}")
+    if body.get("refused"):
+        raise typer.Exit(code=1)
+
+
 @app.command()
 def performance(
     config: Path | None = typer.Option(None, "--config", "-c"),

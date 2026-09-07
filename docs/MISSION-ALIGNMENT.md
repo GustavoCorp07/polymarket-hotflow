@@ -15,7 +15,7 @@ Source of truth: [`MISSION-FULL.md`](MISSION-FULL.md).
 | 16–17 Half-life + maker/taker | Config + EV chooser |
 | 18–21 Exec / stale / latency / risk | Paper SM + clocks + VETO |
 | 22–25 Sizing / velocity / portfolio / regime | Capped Kelly + scores + labels + paper session ledger (cash/positions/realized/unrealized/fees/peak/drawdown from explicit fills) |
-| 26–27 Backtest / anti-overfit | Event-driven replay (`hotflow backtest --fixture`); longer synthetic + redacted live CLOB book sample; train/val/OOS + walk-forward stub; refuses max-abs-PnL selection |
+| 26–27 Backtest / anti-overfit | Event-driven replay (`hotflow backtest --fixture`); longer synthetic + redacted live CLOB book sample; train/val/OOS; `hotflow walk-forward` on existing paper/backtest closes (expanding/rolling, caveated folds, labeled synthetic regime split or N/A); refuses max-abs-PnL; no auto-disable |
 | 28 Modes | backtest / paper / shadow (`hotflow shadow --mock`, `hotflow shadow-soak`) / live |
 | 29–30 Tuner / experiments | Offline tuner (`hotflow tune`) writes suggestions only; refuses abs-PnL and production config writes |
 | 31–36 Storage / obs / alerts | SQLite ledger events/snapshots + JSON logs (request/signal/trade/risk/ledger, redaction) + Prometheus from the paper ledger (equity/PnL/drawdown/win-rate after closed trades) + `/metrics` `/health` `/ready` + alerts. PAPER default. No LIVE. |

@@ -59,6 +59,7 @@ hotflow readiness
 hotflow news-fixtures
 hotflow performance --from-reports reports
 hotflow decay --from-reports reports
+hotflow walk-forward --from-reports reports
 hotflow paper-run --mock --cycles 3 --flatten
 hotflow paper-soak --cycles 5
 hotflow paper-soak --long --target-closes 50

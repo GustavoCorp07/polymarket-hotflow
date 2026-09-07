@@ -10,6 +10,7 @@ from hotflow.analytics.io import latest_report, load_json
 from hotflow.analytics.performance import review_extract
 from hotflow.analytics.stats import refuse_max_abs_pnl_selection
 from hotflow.analytics.trades import extract_trades
+from hotflow.analytics.walkforward import build_walk_forward
 from hotflow.monitoring.redact import redact
 
 
@@ -23,12 +24,20 @@ def build_review(
     extract = extract_trades(report)
     performance = review_extract(extract)
     decay = decay_report(extract.pnls)
+    walk = build_walk_forward(report, source=source)
     payload: dict[str, Any] = {
         "mode": "paper",
         "live": False,
         "source": source,
         "performance": performance,
         "decay": decay,
+        "walk_forward": {
+            "fold_count": walk.get("fold_count"),
+            "scheme": walk.get("scheme"),
+            "folds": walk.get("folds"),
+            "regime_split": walk.get("regime_split"),
+            "auto_disable": False,
+        },
         "selection": {
             "abs_pnl_not_a_selection_metric": True,
             "rank_refused": bool(blocked),
