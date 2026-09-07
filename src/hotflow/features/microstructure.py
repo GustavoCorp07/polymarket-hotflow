@@ -6,7 +6,7 @@ Missing history is labeled N/A with `invented: false` — never filled in.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import datetime
 from typing import Any
 
@@ -358,7 +358,7 @@ def spread_regime(
 
 
 def intensity_from_events(
-    events: list[Mapping[str, Any]] | None,
+    events: Sequence[Mapping[str, Any]] | None,
     *,
     now: datetime | None = None,
     window_s: float = 60.0,
@@ -393,8 +393,10 @@ def intensity_from_events(
         return unused
     parsed.sort(key=lambda item: item[0])
     end = now or parsed[-1][0]
-    start = end.timestamp() - max(window_s, 0.0)
-    windowed = [item for item in parsed if item[0].timestamp() >= start - 1e-9]
+    end_ts = end.timestamp()
+    start = end_ts - max(window_s, 0.0)
+    # Decision-time window only — do not look ahead of `now`.
+    windowed = [item for item in parsed if start - 1e-9 <= item[0].timestamp() <= end_ts + 1e-9]
     quotes = [item for item in windowed if item[1] == "book"]
     trades = [item for item in windowed if item[1] == "trade"]
     elapsed = window_s if window_s > 0 else 0.0
@@ -436,7 +438,7 @@ def microstructure_features(
     cfg: MicrostructureConfig | None = None,
     *,
     recent_spreads: list[float] | None = None,
-    events: list[Mapping[str, Any]] | None = None,
+    events: Sequence[Mapping[str, Any]] | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     """Snapshot + N/A map. Backward-compatible keys: mid, microprice, imbalance, spread, depths."""

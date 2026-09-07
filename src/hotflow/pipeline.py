@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -254,7 +255,7 @@ class PaperPipeline:
         extras: dict[str, Any],
         *,
         now: datetime | None = None,
-        events: list[dict[str, Any]] | None = None,
+        events: Sequence[Mapping[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """Parte 45 snapshot on extras. History is observed after the label is computed."""
         recent = list(self._spread_history.get(market.market_id, []))
@@ -281,7 +282,7 @@ class PaperPipeline:
         latency_ms: float = 50.0,
         p_info: float | None = None,
         now: datetime | None = None,
-        micro_events: list[dict[str, Any]] | None = None,
+        micro_events: Sequence[Mapping[str, Any]] | None = None,
     ) -> dict[str, Any]:
         started = monotonic_ms()
         result = self._evaluate_market(
@@ -325,7 +326,7 @@ class PaperPipeline:
         dry_run: bool = False,
         allocation: AllocationDecision | None = None,
         enforce_cooldown: bool = True,
-        micro_events: list[dict[str, Any]] | None = None,
+        micro_events: Sequence[Mapping[str, Any]] | None = None,
     ) -> dict[str, Any]:
         now = now or datetime.now(UTC)
         if latency_ms < 0:
@@ -883,10 +884,12 @@ class PaperPipeline:
                 "question": market.question,
             }
 
-        micro = extras.get("microstructure") if isinstance(extras.get("microstructure"), dict) else {}
+        raw_micro = extras.get("microstructure")
+        micro: dict[str, Any] = raw_micro if isinstance(raw_micro, dict) else {}
         spread = market.spread if market.spread is not None else (market.book.spread if market.book else None)
         mcfg = self.config.microstructure
-        buy_impact = micro.get("impact_buy") if isinstance(micro.get("impact_buy"), (int, float)) else None
+        raw_impact = micro.get("impact_buy")
+        buy_impact = float(raw_impact) if isinstance(raw_impact, (int, float)) else None
         decision = self.risk.decide(
             opp,
             category=category,
@@ -896,8 +899,8 @@ class PaperPipeline:
             now=now,
             requested_notional=min(opp.intended_notional, self.config.risk.max_order_notional),
             enforce_cooldown=enforce_cooldown,
-            bid_depth=micro.get("bid_depth") if isinstance(micro.get("bid_depth"), (int, float)) else None,
-            ask_depth=micro.get("ask_depth") if isinstance(micro.get("ask_depth"), (int, float)) else None,
+            bid_depth=float(micro["bid_depth"]) if isinstance(micro.get("bid_depth"), (int, float)) else None,
+            ask_depth=float(micro["ask_depth"]) if isinstance(micro.get("ask_depth"), (int, float)) else None,
             book_impact=buy_impact,
             min_top_depth=mcfg.min_top_depth,
             max_book_impact=mcfg.max_impact,
