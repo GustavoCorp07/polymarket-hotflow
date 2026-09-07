@@ -560,6 +560,32 @@ def serve_metrics_cmd(
         obs.stop_http()
 
 
+@app.command("failure-soak")
+def failure_soak(
+    config: Path | None = typer.Option(None, "--config", "-c"),
+    out: Path | None = typer.Option(None, "--out"),
+    serve_metrics: bool = typer.Option(False, "--serve-metrics"),
+) -> None:
+    """Inject mocked failures. Must fail safe: no orders, no invented data. No LIVE."""
+    from hotflow.failure.soak import run_failure_soak
+
+    cfg = load_config(config)
+    if cfg.trading.mode.lower() == "live":
+        raise typer.BadParameter("failure-soak refuses LIVE mode")
+    cfg.trading.mode = "paper"
+    obs = _observability(cfg, serve=serve_metrics)
+    payload = run_failure_soak(obs=obs)
+    target = out or Path(cfg.storage.reports_dir) / (
+        f"failure-soak-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}.json"
+    )
+    write_report(target, payload)
+    typer.echo(
+        f"failure-soak fail_safe={payload.get('fail_safe')} "
+        f"scenarios={payload.get('scenario_count')} sent_orders=0 "
+        f"live_blocked={payload.get('gates', {}).get('live_still_blocked')} report={target}"
+    )
+
+
 @app.command()
 def version() -> None:
     from hotflow import __version__

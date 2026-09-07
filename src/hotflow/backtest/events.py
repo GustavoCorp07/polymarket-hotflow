@@ -87,6 +87,41 @@ class FixtureEventSource:
         return out
 
 
+def sanitize_event_rows(rows: Iterable[Any]) -> dict[str, Any]:
+    """Drop corrupt / duplicate / out-of-order rows. Never invent replacements."""
+    accepted: list[MarketEvent] = []
+    rejected: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str]] = set()
+    last_ts: datetime | None = None
+    for index, row in enumerate(rows):
+        if not isinstance(row, dict):
+            rejected.append({"index": index, "reason": ReasonCode.EVENT_CORRUPT, "detail": "not_object"})
+            continue
+        ts = parse_ts(row.get("ts"))
+        kind = str(row.get("kind") or "")
+        if ts is None or kind not in STATE_KINDS:
+            rejected.append({"index": index, "reason": ReasonCode.EVENT_CORRUPT, "detail": "ts_or_kind"})
+            continue
+        payload_raw = row.get("payload")
+        payload: dict[str, Any] = dict(payload_raw) if isinstance(payload_raw, dict) else {}
+        fingerprint = (ts.isoformat(), kind, json.dumps(payload, sort_keys=True, default=str))
+        if fingerprint in seen:
+            rejected.append({"index": index, "reason": ReasonCode.EVENT_DUPLICATE, "detail": kind})
+            continue
+        seen.add(fingerprint)
+        if last_ts is not None and ts < last_ts:
+            rejected.append({"index": index, "reason": ReasonCode.EVENT_OUT_OF_ORDER, "detail": kind})
+            continue
+        last_ts = ts
+        accepted.append(MarketEvent(ts=ts, kind=kind, payload=payload, seq=index))
+    return {
+        "accepted": accepted,
+        "rejected": rejected,
+        "accepted_count": len(accepted),
+        "rejected_count": len(rejected),
+    }
+
+
 def kinds_in(events: Iterable[MarketEvent]) -> set[str]:
     return {item.kind for item in events}
 

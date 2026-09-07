@@ -226,6 +226,17 @@ class PaperPipeline:
         )
         return result
 
+    def check_external_positions(self, external_qty: dict[str, float], *, tol: float = 1e-9) -> list[str]:
+        """Compare ledger qty to a caller-supplied view. Does not invent venue balances."""
+        from hotflow.portfolio.consistency import position_mismatches
+
+        local = {token: float(qty) for token, qty in self.broker.positions.items()}
+        remote = {token: float(qty) for token, qty in external_qty.items()}
+        bad = position_mismatches(local, remote, tol=tol)
+        if bad:
+            self.kills.trip(KillSwitchReason.POSITION_MISMATCH, ",".join(bad))
+        return bad
+
     def _evaluate_market(
         self,
         market: MarketRecord,
@@ -235,6 +246,24 @@ class PaperPipeline:
         now: datetime | None = None,
     ) -> dict[str, Any]:
         now = now or datetime.now(UTC)
+        if latency_ms < 0:
+            self._audit(
+                market_id=market.market_id,
+                accepted=False,
+                reason=ReasonCode.CLOCK_SKEW,
+                detail="negative_latency",
+            )
+            return {"accepted": False, "reason": ReasonCode.CLOCK_SKEW, "detail": "negative_latency"}
+        if market.book and market.book.fetched_at is not None:
+            skew_ms = (market.book.fetched_at - now).total_seconds() * 1000.0
+            if skew_ms > self.clock.skew_tolerance_ms:
+                self._audit(
+                    market_id=market.market_id,
+                    accepted=False,
+                    reason=ReasonCode.CLOCK_SKEW,
+                    detail="book_in_future",
+                )
+                return {"accepted": False, "reason": ReasonCode.CLOCK_SKEW, "detail": "book_in_future"}
         self.clock.touch("gamma", observed_at=market.fetched_at)
         if market.book:
             self.clock.touch("clob_book", observed_at=market.book.fetched_at)

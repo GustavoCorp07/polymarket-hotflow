@@ -18,7 +18,8 @@ hotflow record-stream --mock
 hotflow tune --report reports/backtest-*.json --write-suggestion reports/tune-suggestion.yaml
 hotflow shadow --mock
 hotflow shadow-soak --cycles 5
-pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py tests/test_weather_gamma_fixtures.py tests/test_esports.py tests/test_sports_cache.py tests/test_backtest.py tests/test_recorder.py tests/test_tuner.py tests/test_observability.py tests/test_paper_ledger.py tests/test_paper_gates.py tests/test_shadow_gates.py
+hotflow failure-soak
+pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py tests/test_weather_gamma_fixtures.py tests/test_esports.py tests/test_sports_cache.py tests/test_backtest.py tests/test_recorder.py tests/test_tuner.py tests/test_observability.py tests/test_paper_ledger.py tests/test_paper_gates.py tests/test_shadow_gates.py tests/test_failure_injection.py
 pytest -q
 ```
 
@@ -110,6 +111,24 @@ Ready for SHADOW when:
 - performance is reproducible from the same fixtures (report under `reports/`)
 
 LIVE stays gated.
+
+## Failure injection (Phase 14 / Parte 39)
+
+Mocked only — no live sockets, no LIVE orders, no invented prints.
+
+```bash
+hotflow failure-soak --out reports/failure-soak.json
+# or: python scripts/failure_soak.py
+```
+
+Cases: WS disconnect/reconnect (market/user/RTDS stubs), HTTP 500/429/timeout on
+Gamma/CLOB, corrupt/duplicate/out-of-order events, stale / `MAX_DATA_AGE`,
+missing fees / missing TWAP / data-gap, paper partial-fill vs cancel race,
+ledger vs caller-supplied position mismatch, clock skew / negative latency.
+
+Each case must **fail safe**: skip or kill-switch, `would_*=false`, zero new
+order submits. The report lists `live_prep_still_blocked` (signing, LIVE gates,
+venue reconcile, real-socket inject).
 
 ## LIVE
 

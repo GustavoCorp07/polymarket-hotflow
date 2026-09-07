@@ -134,11 +134,15 @@ class UniverseScanner:
                 await gamma.__aenter__()
             if owns_clob and (cfg.fetch_clob_books or cfg.fetch_clob_fees):
                 await clob.__aenter__()
-            raw_rows = await gamma.list_markets(
-                closed=cfg.closed,
-                limit=cfg.gamma_limit,
-                offset=cfg.gamma_offset,
-            )
+            try:
+                raw_rows = await gamma.list_markets(
+                    closed=cfg.closed,
+                    limit=cfg.gamma_limit,
+                    offset=cfg.gamma_offset,
+                )
+            except Exception as exc:  # noqa: BLE001 — fail safe: empty universe, no invented markets
+                log.warning("gamma list failed err=%s", type(exc).__name__)
+                return []
             for raw in raw_rows:
                 record = market_from_gamma(raw)
                 if not is_eligible(record, cfg):

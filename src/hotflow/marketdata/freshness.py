@@ -28,6 +28,7 @@ class FeedSample:
 @dataclass
 class FeedClock:
     feeds: FeedsConfig
+    skew_tolerance_ms: float = 2_000.0
     _samples: dict[str, FeedSample] = field(default_factory=dict)
 
     def touch(self, name: str, *, observed_at: datetime | None = None) -> None:
@@ -46,7 +47,19 @@ class FeedClock:
         if sample is None:
             return None
         current = now or datetime.now(UTC)
-        return max(0.0, (current - sample.observed_at).total_seconds() * 1000.0)
+        delta_ms = (current - sample.observed_at).total_seconds() * 1000.0
+        if delta_ms < -self.skew_tolerance_ms:
+            return float("inf")
+        return max(0.0, delta_ms)
+
+    def clock_skewed(self, now: datetime | None = None) -> list[str]:
+        current = now or datetime.now(UTC)
+        bad: list[str] = []
+        for name, sample in self._samples.items():
+            delta_ms = (current - sample.observed_at).total_seconds() * 1000.0
+            if delta_ms < -self.skew_tolerance_ms:
+                bad.append(name)
+        return bad
 
     def check(self, name: str, now: datetime | None = None) -> None:
         sample = self._samples.get(name)

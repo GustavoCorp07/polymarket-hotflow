@@ -75,6 +75,13 @@ class PaperBroker:
     ) -> OrderRecord:
         """Fill from the simulator only — never from book disappearance."""
         order = self.orders[client_order_id]
+        if order.status in {
+            OrderStatus.FILLED,
+            OrderStatus.CANCELLED,
+            OrderStatus.REJECTED,
+            OrderStatus.EXPIRED,
+        }:
+            return order
         sm = OrderStateMachine(order)
         if order.status == OrderStatus.CREATED:
             sm.transition(OrderStatus.SUBMITTED)
@@ -101,13 +108,22 @@ class PaperBroker:
         order.updated_at = datetime.now(UTC)
         return order
 
-    def request_cancel(self, client_order_id: str) -> OrderRecord:
+    def request_cancel(self, client_order_id: str, *, settle: bool = True) -> OrderRecord:
         sm = OrderStateMachine(self.orders[client_order_id])
-        if sm.order.status in {OrderStatus.FILLED, OrderStatus.CANCELLED, OrderStatus.REJECTED}:
+        if sm.order.status in {
+            OrderStatus.FILLED,
+            OrderStatus.CANCELLED,
+            OrderStatus.REJECTED,
+            OrderStatus.EXPIRED,
+        }:
             return sm.order
-        if sm.order.status != OrderStatus.CANCEL_REQUESTED:
+        if sm.order.status is OrderStatus.CREATED:
+            sm.transition(OrderStatus.CANCELLED)
+            return sm.order
+        if sm.order.status is not OrderStatus.CANCEL_REQUESTED:
             sm.transition(OrderStatus.CANCEL_REQUESTED)
-        sm.transition(OrderStatus.CANCELLED)
+        if settle and sm.order.status is OrderStatus.CANCEL_REQUESTED:
+            sm.transition(OrderStatus.CANCELLED)
         return sm.order
 
     def reject(self, client_order_id: str, reason: str) -> OrderRecord:

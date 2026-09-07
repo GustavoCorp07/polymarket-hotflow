@@ -136,6 +136,8 @@ PnL velocity, regime labels, Parte 46 signal-quality JSON.
 - TWAP-aware crypto paper FV + public RTDS print cache (official 30s/60s only)  
 - Esports skip-heavy parser + Gamma fixtures (no invented live model)  
 - Prometheus metrics + redacted JSON logs + `/metrics` `/health` `/ready`
-  (localhost, default-off) + alert callbacks (kill, drawdown, stale WS, …)  
+  (localhost, default-off) + alert callbacks (kill, drawdown, stale WS, …)
+- Failure injection soak (`hotflow failure-soak`) — mocked WS/HTTP/event faults;
+  fail-safe skip/kill, no invented prints, LIVE still gated  
 - Offline tuner suggestions (`hotflow tune`; never auto-applies)  
 - Strategy experiment tracking fields
