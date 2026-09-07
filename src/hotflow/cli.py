@@ -586,6 +586,39 @@ def failure_soak(
     )
 
 
+@app.command()
+def readiness(
+    config: Path | None = typer.Option(None, "--config", "-c"),
+    from_reports: Path | None = typer.Option(
+        None, "--from-reports", help="Load latest soak/gate JSON from this directory (no invented results)"
+    ),
+    out: Path | None = typer.Option(None, "--out"),
+) -> None:
+    """Roll up paper/shadow/failure/live-gates. live_ready stays false. No LIVE."""
+    from hotflow.readiness.collect import collect_by_running, collect_from_reports
+    from hotflow.readiness.rollup import build_readiness, format_summary
+
+    cfg = load_config(config)
+    if cfg.trading.mode.lower() == "live":
+        raise typer.BadParameter("readiness refuses LIVE mode")
+    bundle = collect_from_reports(from_reports) if from_reports else collect_by_running(cfg)
+    payload = build_readiness(
+        paper=bundle["paper"],
+        shadow=bundle["shadow"],
+        failure=bundle["failure"],
+        live_gates=bundle["live_gates"],
+        sources=bundle["sources"],
+    )
+    target = out or Path(cfg.storage.reports_dir) / (
+        f"readiness-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}.json"
+    )
+    write_report(target, payload)
+    typer.echo(format_summary(payload))
+    typer.echo(f"report={target}")
+    if not payload.get("ok"):
+        raise typer.Exit(code=1)
+
+
 @app.command("live-gates")
 def live_gates_cmd(
     config: Path | None = typer.Option(None, "--config", "-c"),

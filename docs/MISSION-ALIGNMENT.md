@@ -23,4 +23,4 @@ Source of truth: [`MISSION-FULL.md`](MISSION-FULL.md).
 | 43–47 Watchlist / filter / micro / audit | Implemented |
 | 48–51 Skills / watch routine | Scripts; no auto prod change |
 | 52–53 Performance / decay | Not yet (needs trade history) |
-| 54–64 Preservation / repo / CI / phases | Docs + paper/shadow/failure soaks + LIVE-gate freeze (`hotflow live-gates`); LIVE still gated |
+| 54–64 Preservation / repo / CI / phases | Docs + soaks + LIVE-gate freeze + `hotflow readiness` rollup (`live_ready=false`); LIVE still gated |

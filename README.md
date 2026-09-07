@@ -55,6 +55,7 @@ hotflow shadow --mock
 hotflow shadow-soak --cycles 5
 hotflow failure-soak
 hotflow live-gates
+hotflow readiness
 hotflow paper-run --mock --cycles 3 --flatten
 hotflow paper-soak --cycles 5
 

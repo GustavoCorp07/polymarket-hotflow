@@ -20,7 +20,8 @@ hotflow shadow --mock
 hotflow shadow-soak --cycles 5
 hotflow failure-soak
 hotflow live-gates
-pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py tests/test_weather_gamma_fixtures.py tests/test_esports.py tests/test_sports_cache.py tests/test_backtest.py tests/test_recorder.py tests/test_tuner.py tests/test_observability.py tests/test_paper_ledger.py tests/test_paper_gates.py tests/test_shadow_gates.py tests/test_failure_injection.py tests/test_live_gates.py tests/test_security_hygiene.py
+hotflow readiness
+pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py tests/test_weather_gamma_fixtures.py tests/test_esports.py tests/test_sports_cache.py tests/test_backtest.py tests/test_recorder.py tests/test_tuner.py tests/test_observability.py tests/test_paper_ledger.py tests/test_paper_gates.py tests/test_shadow_gates.py tests/test_failure_injection.py tests/test_live_gates.py tests/test_security_hygiene.py tests/test_readiness.py
 pytest -q
 ```
 
@@ -154,6 +155,19 @@ raise in PAPER and still refuse if flags are forced open.
 | Wallet / EIP-712 / HMAC signing | Blocked (not implemented) |
 | `accept_*` + `HOTFLOW_ACCEPT_LIVE` | **Must stay false / 0** |
 | Zero critical bugs + billing-unlocked CI | Blocked |
+
+## Readiness rollup
+
+```bash
+hotflow readiness                          # lightweight paper/shadow + failure-soak + live-gates
+hotflow readiness --from-reports reports   # parse latest real JSON only; no invented results
+# or: python scripts/readiness.py
+```
+
+The report under `reports/readiness-*.json` lists PASSED / FAILED / SKIPPED per
+check, `paper_ready` / `shadow_ready` / `failure_ready`, and **`live_ready=false`**.
+Exit 0 only when paper + shadow + failure-soak + frozen live-gates all pass.
+`--from-reports` skips (does not invent) missing files and then fails closed.
 
 When (later) those are truly ready, LIVE still needs **all** of:
 
