@@ -30,7 +30,8 @@ hotflow paper-soak --mixed --cycles 5
 hotflow performance --report reports/paper-soak-long-*.json
 hotflow decay --report reports/paper-soak-long-*.json
 hotflow walk-forward --report reports/paper-soak-long-*.json
-pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py tests/test_weather_gamma_fixtures.py tests/test_esports.py tests/test_sports_cache.py tests/test_backtest.py tests/test_recorder.py tests/test_tuner.py tests/test_observability.py tests/test_paper_ledger.py tests/test_paper_gates.py tests/test_shadow_gates.py tests/test_failure_injection.py tests/test_live_gates.py tests/test_security_hygiene.py tests/test_readiness.py tests/test_news_engine.py tests/test_performance.py tests/test_paper_long_soak.py tests/test_mixed_paper_soak.py tests/test_mixed_walkforward.py tests/test_walkforward.py
+hotflow skip-audit
+pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py tests/test_weather_gamma_fixtures.py tests/test_esports.py tests/test_sports_cache.py tests/test_backtest.py tests/test_recorder.py tests/test_tuner.py tests/test_observability.py tests/test_paper_ledger.py tests/test_paper_gates.py tests/test_shadow_gates.py tests/test_failure_injection.py tests/test_live_gates.py tests/test_security_hygiene.py tests/test_readiness.py tests/test_news_engine.py tests/test_performance.py tests/test_paper_long_soak.py tests/test_mixed_paper_soak.py tests/test_mixed_walkforward.py tests/test_walkforward.py tests/test_microstructure.py tests/test_signal_quality.py
 pytest -q
 ```
 
@@ -263,6 +264,7 @@ When (later) those are truly ready, LIVE still needs **all** of:
 
 ```bash
 python scripts/hotflow_daily_review.py
+hotflow skip-audit                  # Parte 47 skip × spread_regime rollup (no mutation)
 python scripts/hotflow_experiment.py
 python scripts/hotflow_incident.py
 ```

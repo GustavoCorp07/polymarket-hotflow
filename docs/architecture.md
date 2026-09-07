@@ -121,7 +121,9 @@ microstructure (mid/microprice/imbalance **plus** weighted imbalance, slope,
 convexity, gaps, VWAP-to-depth, spread regime — see `docs/strategy.md`),
 capped Kelly sizing, maker/taker EV,
 PnL velocity, first-class regime detectors (Parte 25; N/A if features missing),
-Parte 46 signal-quality JSON, Parte 52–53
+Parte 46 signal-quality JSON on **every** PAPER decision (TRADE and SKIP;
+nulls when unknown), Parte 47 skip audit (`IMPACT_EXHAUSTED` is audit-only;
+`max_impact` / `min_top_depth` default-off), Parte 52–53
 performance/decay reviews from existing ledger/backtest JSON (suggestion-only).
 Mixed soak JSON adds a detected-label split (proposals first; joined close PnL
 second). `--long` remains the ≥50-close synthetic-label path.
