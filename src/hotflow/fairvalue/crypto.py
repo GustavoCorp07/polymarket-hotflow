@@ -5,7 +5,7 @@ from __future__ import annotations
 from hotflow.config import FairValueConfig
 from hotflow.fairvalue.fees import UnknownFeesError, taker_fee_per_share, walk_slippage
 from hotflow.reason_codes import ReasonCode
-from hotflow.types import EdgeBreakdown, MarketRecord, Side
+from hotflow.types import EdgeBreakdown, MarketRecord, Side, TwapSnapshot
 
 
 def _clip_prob(value: float) -> float:
@@ -48,62 +48,72 @@ class CryptoFairValue:
         min_required_edge: float,
         config: FairValueConfig,
         p_info: float | None = None,
+        twap: TwapSnapshot | None = None,
     ) -> EdgeBreakdown:
         book = market.book
         bid = book.best_bid if book else market.best_bid
         ask = book.best_ask if book else market.best_ask
         if bid is None or ask is None:
-            return EdgeBreakdown(
-                p_fair=0.0,
-                market_price=0.0,
-                raw_edge=0.0,
-                fee_per_share=0.0,
-                spread_cost=0.0,
-                slippage=0.0,
-                latency_haircut=config.latency_haircut,
-                adverse_selection=config.adverse_selection_haircut,
-                fill_penalty=config.fill_penalty,
-                net_expected_edge=0.0,
-                confidence=0.0,
-                skip=True,
-                reason=ReasonCode.NO_BOOK,
+            return _attach_twap(
+                EdgeBreakdown(
+                    p_fair=0.0,
+                    market_price=0.0,
+                    raw_edge=0.0,
+                    fee_per_share=0.0,
+                    spread_cost=0.0,
+                    slippage=0.0,
+                    latency_haircut=config.latency_haircut,
+                    adverse_selection=config.adverse_selection_haircut,
+                    fill_penalty=config.fill_penalty,
+                    net_expected_edge=0.0,
+                    confidence=0.0,
+                    skip=True,
+                    reason=ReasonCode.NO_BOOK,
+                ),
+                twap,
             )
         p_fair = self.p_outcome(market, config=config, p_info=p_info)
         if p_fair is None:
-            return EdgeBreakdown(
-                p_fair=0.0,
-                market_price=ask if side == Side.BUY else bid,
-                raw_edge=0.0,
-                fee_per_share=0.0,
-                spread_cost=(ask - bid) / 2.0,
-                slippage=0.0,
-                latency_haircut=config.latency_haircut,
-                adverse_selection=config.adverse_selection_haircut,
-                fill_penalty=config.fill_penalty,
-                net_expected_edge=0.0,
-                confidence=0.0,
-                skip=True,
-                reason=ReasonCode.NO_TRADE,
+            return _attach_twap(
+                EdgeBreakdown(
+                    p_fair=0.0,
+                    market_price=ask if side == Side.BUY else bid,
+                    raw_edge=0.0,
+                    fee_per_share=0.0,
+                    spread_cost=(ask - bid) / 2.0,
+                    slippage=0.0,
+                    latency_haircut=config.latency_haircut,
+                    adverse_selection=config.adverse_selection_haircut,
+                    fill_penalty=config.fill_penalty,
+                    net_expected_edge=0.0,
+                    confidence=0.0,
+                    skip=True,
+                    reason=ReasonCode.NO_TRADE,
+                ),
+                twap,
             )
         market_price = ask if side == Side.BUY else bid
         raw_edge = (p_fair - market_price) if side == Side.BUY else (market_price - p_fair)
         try:
             fee = taker_fee_per_share(market_price, market.fees)
         except UnknownFeesError:
-            return EdgeBreakdown(
-                p_fair=p_fair,
-                market_price=market_price,
-                raw_edge=raw_edge,
-                fee_per_share=0.0,
-                spread_cost=(ask - bid) / 2.0,
-                slippage=0.0,
-                latency_haircut=config.latency_haircut,
-                adverse_selection=config.adverse_selection_haircut,
-                fill_penalty=config.fill_penalty,
-                net_expected_edge=0.0,
-                confidence=config.default_confidence,
-                skip=True,
-                reason=ReasonCode.UNKNOWN_FEES,
+            return _attach_twap(
+                EdgeBreakdown(
+                    p_fair=p_fair,
+                    market_price=market_price,
+                    raw_edge=raw_edge,
+                    fee_per_share=0.0,
+                    spread_cost=(ask - bid) / 2.0,
+                    slippage=0.0,
+                    latency_haircut=config.latency_haircut,
+                    adverse_selection=config.adverse_selection_haircut,
+                    fill_penalty=config.fill_penalty,
+                    net_expected_edge=0.0,
+                    confidence=config.default_confidence,
+                    skip=True,
+                    reason=ReasonCode.UNKNOWN_FEES,
+                ),
+                twap,
             )
         if book:
             levels = [(lvl.price, lvl.size) for lvl in (book.asks if side == Side.BUY else book.bids)]
@@ -122,19 +132,46 @@ class CryptoFairValue:
             - fill_penalty
         )
         skip = net <= min_required_edge
-        return EdgeBreakdown(
-            p_fair=p_fair,
-            market_price=market_price,
-            raw_edge=raw_edge,
-            fee_per_share=fee,
-            spread_cost=spread_cost,
-            slippage=slippage,
-            latency_haircut=config.latency_haircut,
-            adverse_selection=config.adverse_selection_haircut,
-            fill_penalty=fill_penalty,
-            net_expected_edge=net,
-            confidence=config.default_confidence if p_info is None else min(0.85, config.default_confidence + 0.2),
-            fee_rate_used=market.fees.rate,
-            skip=skip,
-            reason=ReasonCode.EDGE_TOO_SMALL if skip else ReasonCode.OK,
+        confidence = config.default_confidence
+        if p_info is not None:
+            confidence = min(0.85, config.default_confidence + 0.2)
+        if twap is not None:
+            confidence = min(0.85, confidence + 0.05)
+        return _attach_twap(
+            EdgeBreakdown(
+                p_fair=p_fair,
+                market_price=market_price,
+                raw_edge=raw_edge,
+                fee_per_share=fee,
+                spread_cost=spread_cost,
+                slippage=slippage,
+                latency_haircut=config.latency_haircut,
+                adverse_selection=config.adverse_selection_haircut,
+                fill_penalty=fill_penalty,
+                net_expected_edge=net,
+                confidence=confidence,
+                fee_rate_used=market.fees.rate,
+                skip=skip,
+                reason=ReasonCode.EDGE_TOO_SMALL if skip else ReasonCode.OK,
+            ),
+            twap,
         )
+
+
+def _attach_twap(edge: EdgeBreakdown, twap: TwapSnapshot | None) -> EdgeBreakdown:
+    if twap is None:
+        return edge
+    return edge.model_copy(
+        update={
+            "current_twap": twap.current_twap,
+            "projected_twap": twap.projected_twap,
+            "distance_to_strike": twap.distance_to_strike,
+            "time_remaining_s": twap.time_remaining_s,
+            "required_future_price": twap.required_future_price,
+            "probability_of_finish_above": twap.probability_of_finish_above,
+            "probability_of_finish_below": twap.probability_of_finish_below,
+            "twap_window_seconds": twap.window_seconds,
+            "twap_symbol": twap.symbol,
+            "twap_source": twap.source,
+        }
+    )

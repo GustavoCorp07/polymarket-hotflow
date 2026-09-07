@@ -11,8 +11,14 @@ exists. **NO TRADE is valid.**
 
 - Discover BTC/ETH/SOL Up/Down (5m / 15m / 4h) dynamically — no fixed whitelist.
 - Fair value is `P(outcome|info)`, not momentum > threshold.
-- TWAP-aware hooks accept **only** official Chainlink/RTDS windows 30s and 60s
-  (`docs/research-current.md`). Do not invent a TWAP.
+- TWAP-aware paper path accepts **only** official Chainlink/RTDS windows 30s
+  and 60s parsed from market metadata (`docs/research-current.md`). Do not
+  invent a TWAP, a window default, or a homemade remaining-average.
+- Computed fields: `current_twap`, `projected_twap` (persistence of the
+  official print), `distance_to_strike`, `time_remaining`,
+  `required_future_price` (= parsed strike / required official TWAP at expiry),
+  `probability_of_finish_above` / `below` (paper heuristic). These feed
+  `P(outcome|info)` → RAW_EDGE → NET after fetched fees.
 - Maker vs taker: compare `EV_maker` vs `EV_taker`; taker only if half-life is
   short and NET edge remains positive after fetched fees.
 

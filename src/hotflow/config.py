@@ -92,10 +92,20 @@ class OpportunityConfig(BaseModel):
     min_score: float = 0.0
 
 
+class TwapFairValueConfig(BaseModel):
+    """Paper TWAP path. Window is never defaulted — it must be parsed as 30 or 60."""
+
+    enabled: bool = True
+    require_parsed_window: bool = True
+    # Paper heuristic only — official docs do not publish a settlement vol.
+    paper_annualized_vol: float = 0.80
+    min_time_remaining_s: float = 1.0
+
+
 class CryptoFairValueConfig(BaseModel):
     enabled: bool = True
-    twap_window_seconds: int = 60
     prior_blend: float = 0.35
+    twap: TwapFairValueConfig = Field(default_factory=TwapFairValueConfig)
 
 
 class FairValueConfig(BaseModel):
@@ -151,6 +161,8 @@ class FeedConfig(BaseModel):
     max_data_age_ms: int = 8_000
     critical: bool = False
     ping_interval_s: int | None = None
+    # rtds only: optional unauthenticated public RTDS reader (off by default).
+    live_public_client: bool = False
 
 
 class FeedsConfig(BaseModel):

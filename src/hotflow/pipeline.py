@@ -11,17 +11,19 @@ from hotflow.analytics.experiments import git_commit
 from hotflow.analytics.pnl_velocity import pnl_velocity
 from hotflow.analytics.signal_quality import signal_quality
 from hotflow.config import HotflowConfig
-from hotflow.discovery.resolution import parse_resolution
+from hotflow.discovery.resolution import parse_resolution, parse_twap_resolution
 from hotflow.discovery.scanner import UniverseScanner, infer_category
 from hotflow.execution.live_gate import live_gates_open
 from hotflow.execution.paper import PaperBroker
 from hotflow.fairvalue.crypto import CryptoFairValue
 from hotflow.fairvalue.maker_taker import choose_style
+from hotflow.fairvalue.twap import compute_twap_snapshot, time_remaining_seconds, twap_p_info_for_market
 from hotflow.features.snapshot import build_feature_snapshot
 from hotflow.hotmarket.opportunity import score_opportunity
 from hotflow.hotmarket.score import score_hot_market
 from hotflow.hotmarket.watchlist import resource_plan
 from hotflow.marketdata.freshness import FeedClock
+from hotflow.marketdata.rtds_twap import FixtureTwapSource, TwapObservationSource
 from hotflow.portfolio.sizing import size_notional
 from hotflow.reason_codes import ReasonCode
 from hotflow.risk.engine import RiskEngine
@@ -34,6 +36,7 @@ from hotflow.types import (
     OrderBook,
     Side,
     SignalAudit,
+    TwapSnapshot,
 )
 
 
@@ -52,7 +55,14 @@ def _intended_shares(market: MarketRecord, config: HotflowConfig, notional: floa
 
 
 class PaperPipeline:
-    def __init__(self, config: HotflowConfig, store: SqliteStore | None = None) -> None:
+    def __init__(
+        self,
+        config: HotflowConfig,
+        store: SqliteStore | None = None,
+        *,
+        twap_source: TwapObservationSource | None = None,
+        use_twap_fixtures: bool = False,
+    ) -> None:
         self.config = config
         self.kills = KillSwitchBoard()
         self.risk = RiskEngine(config.risk, self.kills)
@@ -61,6 +71,13 @@ class PaperPipeline:
         self.clock = FeedClock(config.feeds)
         self.store = store
         self.audits: list[SignalAudit] = []
+        if twap_source is not None:
+            self.twap_source = twap_source
+        elif use_twap_fixtures:
+            self.twap_source = FixtureTwapSource()
+        else:
+            # Empty until an official observation arrives. Do not invent live TWAPs.
+            self.twap_source = FixtureTwapSource(observations={})
 
     def _audit(self, **kwargs: Any) -> SignalAudit:
         row = SignalAudit(session_id=self.config.trading.session_id, **kwargs)
@@ -111,9 +128,61 @@ class PaperPipeline:
             self._audit(market_id=market.market_id, accepted=False, reason=ReasonCode.UNKNOWN_RESOLUTION)
             return {"accepted": False, "reason": ReasonCode.UNKNOWN_RESOLUTION}
 
+        twap_spec = parse_twap_resolution(market)
+        twap_snap: TwapSnapshot | None = None
+        twap_p_info = p_info
+        if self.config.fair_value.crypto.twap.enabled and twap_spec.is_twap_market:
+            if not twap_spec.complete:
+                reason = twap_spec.skip_reason or ReasonCode.UNKNOWN_RESOLUTION
+                self._audit(
+                    market_id=market.market_id,
+                    accepted=False,
+                    reason=reason,
+                    detail="twap_spec_incomplete",
+                    extra={"twap_spec": twap_spec.model_dump()},
+                )
+                return {"accepted": False, "reason": reason, "twap_spec": twap_spec.model_dump()}
+            observation = self.twap_source.latest(twap_spec.symbol or "", twap_spec.window_seconds or 0)
+            if observation is None:
+                self._audit(
+                    market_id=market.market_id,
+                    accepted=False,
+                    reason=ReasonCode.TWAP_OBSERVATION_MISSING,
+                    extra={"twap_spec": twap_spec.model_dump()},
+                )
+                return {
+                    "accepted": False,
+                    "reason": ReasonCode.TWAP_OBSERVATION_MISSING,
+                    "twap_spec": twap_spec.model_dump(),
+                }
+            remaining = time_remaining_seconds(market.resolution.end_date, now=now)
+            if remaining is None:
+                self._audit(market_id=market.market_id, accepted=False, reason=ReasonCode.UNKNOWN_RESOLUTION)
+                return {"accepted": False, "reason": ReasonCode.UNKNOWN_RESOLUTION}
+            twap_snap = compute_twap_snapshot(
+                twap_spec,
+                observation,
+                time_remaining_s=remaining,
+                config=self.config.fair_value.crypto.twap,
+            )
+            self.clock.touch("rtds", observed_at=observation.observed_at)
+            rtds_age = self.clock.age_ms("rtds", now)
+            if rtds_age is not None and rtds_age > self.config.feeds.rtds.max_data_age_ms:
+                self._audit(
+                    market_id=market.market_id,
+                    accepted=False,
+                    reason=ReasonCode.STALE_DATA,
+                    detail="rtds",
+                )
+                return {"accepted": False, "reason": ReasonCode.STALE_DATA, "detail": "rtds"}
+            if p_info is None:
+                twap_p_info = twap_p_info_for_market(market, twap_snap)
+
         hms = score_hot_market(market, self.config.hot_market)
         snap = build_feature_snapshot(market, hms)
         snap.extras["resource_plan"] = resource_plan(hms.tier)
+        if twap_snap is not None:
+            snap.extras["twap"] = twap_snap.model_dump()
         if self.store:
             self.store.save_feature(market.market_id, snap.model_dump(mode="json"))
 
@@ -135,7 +204,8 @@ class PaperPipeline:
             shares=probe_shares,
             min_required_edge=self.config.trading.min_required_edge,
             config=self.config.fair_value,
-            p_info=p_info,
+            p_info=twap_p_info,
+            twap=twap_snap,
         )
         if edge.skip:
             self._audit(
@@ -257,9 +327,16 @@ class PaperPipeline:
                 "signal": quality,
                 "git_commit": git_commit(),
                 "strategy_version": self.config.experiment.version,
+                "twap": twap_snap.model_dump() if twap_snap else None,
             },
         )
-        return {"accepted": True, "reason": ReasonCode.OK, "order": order.model_dump(mode="json")}
+        return {
+            "accepted": True,
+            "reason": ReasonCode.OK,
+            "order": order.model_dump(mode="json"),
+            "edge": edge.model_dump(),
+            "twap": twap_snap.model_dump() if twap_snap else None,
+        }
 
     async def run_scan(
         self,
@@ -289,6 +366,53 @@ def write_report(path: Path, payload: dict[str, Any]) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
     return path
+
+
+def demo_twap_market(
+    *,
+    hot: bool = True,
+    fees_enabled: bool = True,
+    rate: float = 0.04,
+    window_seconds: int = 60,
+    strike: float = 65000.0,
+    end_date: str | None = None,
+) -> MarketRecord:
+    """Deterministic crypto Up/Down fixture with official 30s/60s TWAP wording."""
+    from datetime import timedelta
+
+    from hotflow.official import RTDS_TWAP_WINDOWS, rtds_twap_topic
+
+    if window_seconds not in RTDS_TWAP_WINDOWS:
+        raise ValueError("demo TWAP window must be an official 30 or 60 seconds")
+    market = demo_market(hot=hot, fees_enabled=fees_enabled, rate=rate)
+    close = end_date or (datetime.now(UTC) + timedelta(seconds=90)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    topic = rtds_twap_topic(window_seconds)
+    source = (
+        f"Chainlink {window_seconds}-second TWAP via Polymarket RTDS topic {topic} "
+        f"(btc/usd). Opening reference {strike}. Resolves Yes if the official "
+        f"Chainlink {window_seconds}s TWAP finishes above the opening reference."
+    )
+    market.market_id = "demo-btc-twap"
+    market.slug = "demo-btc-twap"
+    market.question = (
+        f"Will BTC/USD official Chainlink {window_seconds}-second TWAP finish "
+        f"above the opening reference {strike}?"
+    )
+    market.raw_gamma = {
+        "description": source,
+        "resolutionSource": source,
+        "line": strike,
+        "endDate": close,
+    }
+    market.resolution = parse_resolution(
+        {
+            "resolutionSource": source,
+            "endDate": close,
+            "line": strike,
+            "description": source,
+        }
+    )
+    return market
 
 
 def demo_market(*, hot: bool = True, fees_enabled: bool = True, rate: float = 0.04) -> MarketRecord:

@@ -10,11 +10,11 @@ class CryptoStrategy:
     name = "crypto_updown"
     category = "crypto"
 
-    def __init__(self, twap_window_seconds: int = 60) -> None:
-        if twap_window_seconds not in RTDS_TWAP_WINDOWS:
+    def __init__(self, twap_window_seconds: int | None = None) -> None:
+        if twap_window_seconds is not None and twap_window_seconds not in RTDS_TWAP_WINDOWS:
             raise ValueError(
                 f"twap_window_seconds must be one of {sorted(RTDS_TWAP_WINDOWS)} "
-                "(official Chainlink/RTDS windows)"
+                "(official Chainlink/RTDS windows); do not invent a default"
             )
         self.twap_window_seconds = twap_window_seconds
 
@@ -25,6 +25,8 @@ class CryptoStrategy:
         return {
             "strategy": self.name,
             "category": self.category,
-            "twap_window_seconds": str(self.twap_window_seconds),
+            "twap_window_seconds": (
+                "from_resolution" if self.twap_window_seconds is None else str(self.twap_window_seconds)
+            ),
             "twap_source": "polymarket_rtds_chainlink",
         }

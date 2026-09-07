@@ -118,6 +118,53 @@ class FeeSchedule(BaseModel):
         return self.enabled is not None
 
 
+class TwapResolutionSpec(BaseModel):
+    """Parsed official TWAP identity. Incomplete specs must not be filled in."""
+
+    is_twap_market: bool = False
+    feed: str | None = None
+    window_seconds: int | None = None
+    symbol: str | None = None
+    opening_reference: float | None = None
+    strike: float | None = None
+    final_calculation_rule: str = ""
+    official_settlement_formula_published: bool = False
+    skip_reason: str | None = None
+    complete: bool = False
+    source_text: str = ""
+
+
+class OfficialTwapObservation(BaseModel):
+    """One official Chainlink TWAP print (RTDS payload or fixture of that shape)."""
+
+    symbol: str
+    window_seconds: int
+    value: float
+    full_accuracy_value: str | None = None
+    payload_timestamp_ms: int | None = None
+    observed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    source: str = "fixture"
+    topic: str | None = None
+
+
+class TwapSnapshot(BaseModel):
+    current_twap: float
+    projected_twap: float
+    distance_to_strike: float
+    time_remaining_s: float
+    required_future_price: float
+    probability_of_finish_above: float
+    probability_of_finish_below: float
+    window_seconds: int
+    symbol: str
+    opening_reference: float | None = None
+    strike: float
+    feed: str | None = None
+    source: str = "fixture"
+    final_calculation_rule: str = ""
+    skip_reason: str | None = None
+
+
 class ResolutionMeta(BaseModel):
     source: str | None = None
     uma_status: str | None = None
@@ -187,6 +234,16 @@ class EdgeBreakdown(BaseModel):
     fee_rate_used: float | None = None
     skip: bool = False
     reason: str | None = None
+    current_twap: float | None = None
+    projected_twap: float | None = None
+    distance_to_strike: float | None = None
+    time_remaining_s: float | None = None
+    required_future_price: float | None = None
+    probability_of_finish_above: float | None = None
+    probability_of_finish_below: float | None = None
+    twap_window_seconds: int | None = None
+    twap_symbol: str | None = None
+    twap_source: str | None = None
 
 
 class Opportunity(BaseModel):

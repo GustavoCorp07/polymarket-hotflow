@@ -1,0 +1,12 @@
+{
+  "topic": "crypto_prices_twap_sixty",
+  "type": "update",
+  "timestamp": 1785178800123,
+  "payload": {
+    "symbol": "btc/usd",
+    "value": 65000.5,
+    "full_accuracy_value": "65000500000000000000000",
+    "timestamp": 1785178800000,
+    "window_s": 60
+  }
+}

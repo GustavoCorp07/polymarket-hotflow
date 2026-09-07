@@ -164,15 +164,45 @@ ours. It maps to venue statuses only when a live adapter exists and is gated.
 
 ### Chainlink TWAP (do not invent a TWAP)
 
-[Chainlink TWAP](https://docs.polymarket.com/market-data/chainlink-twap):
+Re-verified **2026-09-07** from
+[Chainlink TWAP](https://docs.polymarket.com/market-data/chainlink-twap)
+and [Realtime data](https://docs.polymarket.com/market-data/realtime-data).
 
-- Prefer RTDS topic `prices.crypto.chainlink.twap` (SDK) or raw topics
-  `crypto_prices_twap_thirty` / `crypto_prices_twap_sixty`
-- Windows: **30** or **60** seconds only  
-- Symbols: lowercase slash form, e.g. `btc/usd`  
-- RTDS heartbeat: `PING` every 5 seconds  
-- Direct clients must reconnect and resubscribe; no snapshot / replay  
-- Do **not** independently reproduce Chainlink’s TWAP
+| Item | Official value |
+| --- | --- |
+| RTDS URL | `wss://ws-live-data.polymarket.com` (public, **no credentials**) |
+| Heartbeat | text `PING` every **5 seconds** |
+| Lookback windows | **30** and **60** seconds only (not publication cadence) |
+| Raw topics | `crypto_prices_twap_thirty`, `crypto_prices_twap_sixty` |
+| SDK topic | `prices.crypto.chainlink.twap` with `windowSeconds` / `window_seconds` 30\|60 |
+| Symbol form | lowercase slash, e.g. `btc/usd` |
+| Documented Chainlink symbols | `btc/usd`, `eth/usd`, `sol/usd`, `xrp/usd` |
+| Raw `filters` | exact compact JSON, no spaces: `{"symbol":"btc/usd"}` |
+| Payload | `value` (display), `full_accuracy_value` (E18), `payload.timestamp` = Chainlink observation time |
+| After disconnect | **no snapshot / history / replay** — reconnect and resubscribe |
+| Homemade TWAP | **forbidden** — sampling/weighting unpublished |
+
+[Liquidity rewards](https://docs.polymarket.com/market-makers/liquidity-rewards)
+says crypto **5-minute, 15-minute, and 4-hour** markets **settle on TWAP**.
+That is **market duration**, not the Chainlink 30s/60s lookback. Official docs
+do **not** map 5m/15m/4h → 30 vs 60, and do **not** publish the start-vs-end /
+strike settlement formula for Up/Down markets.
+
+HOTFLOW therefore:
+
+- parses 30 or 60 **only** from market resolution metadata/text
+- skips (`TWAP_WINDOW_UNKNOWN`) when the market says TWAP/Chainlink but the
+  lookback is missing or both 30 and 60 appear
+- never defaults the window to 60
+- uses the official RTDS observation (or an official-shape fixture) as
+  `current_twap`; `projected_twap` is persistence of that official print
+- treats `required_future_price` as the **required official TWAP at expiry**
+  (the parsed strike). It does not reconstruct a remaining in-window average
+- uses a documented **paper heuristic** for `probability_of_finish_above/below`
+  (r=0 digital around the official observation). That is not venue math
+
+Optional live public RTDS client: `PublicRtdsTwapClient` (off by default,
+`feeds.rtds.live_public_client: false`). pytest never opens the socket.
 
 ### Official Python SDK (optional)
 

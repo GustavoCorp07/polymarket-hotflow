@@ -11,7 +11,7 @@ import typer
 
 from hotflow.config import load_config
 from hotflow.execution.live_gate import live_gates_open
-from hotflow.pipeline import PaperPipeline, demo_market, write_report
+from hotflow.pipeline import PaperPipeline, demo_market, demo_twap_market, write_report
 from hotflow.storage.sqlite_store import SqliteStore
 
 app = typer.Typer(help="POLYMARKET HOTFLOW — paper-first quant system")
@@ -30,11 +30,11 @@ def scan(
     """Scan Gamma + public CLOB and write a report. Never places live orders."""
     cfg = load_config(config)
     store = _store(cfg)
-    pipe = PaperPipeline(cfg, store)
+    pipe = PaperPipeline(cfg, store, use_twap_fixtures=mock)
 
     async def _run() -> dict:
         if mock:
-            markets = [demo_market(hot=True), demo_market(hot=False)]
+            markets = [demo_twap_market(hot=True), demo_market(hot=False)]
             markets[1].market_id = "demo-cold"
             return await pipe.run_scan(markets=markets, use_network=False)
         return await pipe.run_scan(use_network=True)
@@ -59,11 +59,11 @@ def paper_run(
     store = _store(cfg)
     summaries: list[dict[str, Any]] = []
     for _cycle in range(max(1, cycles)):
-        pipe = PaperPipeline(cfg, store)
+        pipe = PaperPipeline(cfg, store, use_twap_fixtures=mock)
         if mock:
-            market = demo_market(hot=True)
-            # Fixture-only informational probability — not a live price.
-            result = pipe.evaluate_market(market, p_info=0.62)
+            market = demo_twap_market(hot=True)
+            # Official-shape RTDS fixture → TWAP fair value (no LLM, no live orders).
+            result = pipe.evaluate_market(market)
             summaries.append(
                 {
                     "ok": True,

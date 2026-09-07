@@ -71,9 +71,13 @@ fair_value:
   default_confidence: 0.55
   crypto:
     enabled: true
-    # Official Chainlink/RTDS windows only: 30 or 60. Not a homemade TWAP.
-    twap_window_seconds: 60
     prior_blend: 0.35
+    twap:
+      enabled: true
+      # Never invent 30 vs 60 — window must be parsed from official market text.
+      require_parsed_window: true
+      paper_annualized_vol: 0.80   # paper heuristic only; not official settlement vol
+      min_time_remaining_s: 1.0
 
 risk:
   max_order_notional: 250.0
@@ -134,6 +138,7 @@ feeds:
     max_data_age_ms: 10000
     critical: false
     ping_interval_s: 5           # official RTDS
+    live_public_client: false    # optional unauthenticated RTDS; off by default
   sports_ws:
     max_data_age_ms: 15000
     critical: false

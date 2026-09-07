@@ -30,7 +30,8 @@ python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 
-# Documented fixture path (no network required)
+# Documented fixture path (no network required). Exercises official-shape
+# RTDS 30s/60s TWAP fair value on PAPER only.
 hotflow paper-run --mock
 
 # Public Gamma + CLOB scan (read-only)
@@ -57,7 +58,7 @@ Copy [`.env.example`](.env.example) to `.env` locally. Leave `HOTFLOW_ACCEPT_LIV
 1. **Universe scanner** — Gamma `GET /markets` + public CLOB book / fee-rate / `clob-markets/{condition_id}`
 2. **HMS 0–100** — COLD / WARM / HOT / ULTRA-HOT
 3. **Opportunity score** after HMS threshold
-4. **Fair value** — `P(outcome|info)`, RAW_EDGE, NET after fetched fees + spread + slippage + latency + adverse selection
+4. **Fair value** — `P(outcome|info)`, RAW_EDGE, NET after fetched fees + spread + slippage + latency + adverse selection. Crypto TWAP markets use the official Chainlink 30s/60s observation when the window/symbol/strike can be parsed; otherwise they skip.
 5. **Risk VETO**
 6. **Paper order state machine** with partial fills and idempotency
 
@@ -91,4 +92,15 @@ GitHub Actions runs lint, typecheck, pytest, and a mock paper-run smoke.
 
 `src/hotflow/{discovery,marketdata,hotmarket,features,fairvalue,strategies,risk,execution,portfolio,storage,analytics,ai_research,monitoring}`
 
-Category adapters (weather/sports/esports), WS reconnect/heartbeat, TWAP hooks (official 30s/60s only), backtester protocol, shadow mode, Prometheus + JSON logs, and the offline tuner are scaffolded with tested interfaces.
+Category adapters (weather/sports/esports), WS reconnect/heartbeat, official RTDS 30s/60s TWAP paper path (fixtures by default; optional unauthenticated live client off), backtester protocol, shadow mode, Prometheus + JSON logs, and the offline tuner are scaffolded with tested interfaces.
+
+## TWAP paper path
+
+```bash
+# Deterministic official-shape RTDS fixture (no live socket, no LIVE orders)
+hotflow paper-run --mock
+pytest -q tests/test_twap.py
+```
+
+Window is **never** defaulted. It must appear as an official 30s or 60s lookback
+in the market’s resolution text. See `docs/research-current.md`.

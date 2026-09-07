@@ -4,8 +4,9 @@
 
 ```bash
 pip install -e ".[dev]"
-hotflow paper-run --mock
+hotflow paper-run --mock    # official-shape RTDS TWAP fixture, PAPER only
 hotflow scan
+pytest -q tests/test_twap.py
 pytest -q
 ```
 

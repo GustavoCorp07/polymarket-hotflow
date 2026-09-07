@@ -105,7 +105,7 @@ PnL velocity, regime labels, Parte 46 signal-quality JSON.
 ## Scaffolded (interfaces tested; adapters incomplete)
 
 - Market / user / RTDS / sports WS reconnect + heartbeat  
-- TWAP-aware crypto hooks (official 30s/60s topics only)  
+- TWAP-aware crypto paper FV (official 30s/60s only; fixtures if RTDS unread)  
 - Weather / sports / esports strategy adapters  
 - Event-driven backtester protocol  
 - `trading.shadow: true` (score + audit, no orders)  
