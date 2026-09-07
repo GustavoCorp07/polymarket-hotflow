@@ -18,6 +18,10 @@ hotflow ci
 
 That script is the **source of truth**.
 
+Static GitHub Pages demo (`docs/pages/`) is covered by `pytest` (`tests/test_pages_demo.py`).
+Publish is a `git push` of that tree to `gh-pages` — see [`github-pages.md`](github-pages.md).
+Do not add `actions/deploy-pages`.
+
 ## Free remote: GitLab.com shared runners
 
 `.gitlab-ci.yml` runs `make ci` on GitLab’s free shared runners (not GitHub

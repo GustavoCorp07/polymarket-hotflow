@@ -1,6 +1,6 @@
 # Default source of truth for lint / types / tests / paper smoke.
 # GitHub-hosted ubuntu-latest is billing-locked; do not wait on Actions minutes.
-.PHONY: ci lint typecheck test paper-smoke secret-hygiene dashboard
+.PHONY: ci lint typecheck test paper-smoke secret-hygiene dashboard pages-demo
 
 PYTHON ?= python3
 
@@ -29,3 +29,6 @@ secret-hygiene:
 
 dashboard:
 	$(PYTHON) -m hotflow dashboard --mock
+
+pages-demo:
+	$(PYTHON) scripts/export_pages_demo.py --out docs/pages --cycles 2
