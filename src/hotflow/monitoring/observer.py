@@ -10,6 +10,7 @@ from typing import Any
 from hotflow.config import HotflowConfig, MonitoringConfig
 from hotflow.marketdata.clock import monotonic_ms
 from hotflow.monitoring.alerts import Alert, AlertCallback, AlertKind, AlertRouter, kinds_for_kill
+from hotflow.monitoring.dashboard import DASHBOARD_PORT, DashboardHub
 from hotflow.monitoring.health import HealthState
 from hotflow.monitoring.http import start_metrics_server, stop_metrics_server
 from hotflow.monitoring.json_logs import JsonLogger
@@ -47,8 +48,11 @@ class Observability:
             live_gates_open=live_gates_open(self.config),
         )
         self.alerts = alerts or AlertRouter(self.logger, on_emit=self._on_alert)
+        self.dashboard = DashboardHub(self.health)
+        self.dashboard.attach_live_gates(self.config)
         self._http: ThreadingHTTPServer | None = None
         self._drawdown_alerted = False
+        self._audit_cursor = 0
         self.metrics.process_start.set(time.time())
         self.metrics.kill.set(0)
         self._sync_ready()
@@ -89,8 +93,14 @@ class Observability:
             registry=self.metrics.registry,
             health=self.health,
             logger=self.logger,
+            hub=self.dashboard,
         )
         return self._http
+
+    def start_dashboard(self, *, bind: str | None = None, port: int | None = None) -> Any:
+        """Same localhost server as metrics; default dashboard port 9109."""
+        listen = DASHBOARD_PORT if port is None else port
+        return self.start_http(bind=bind, port=listen)
 
     @property
     def http_addr(self) -> tuple[str, int] | None:
@@ -175,6 +185,7 @@ class Observability:
             expectancy=float(snap.expectancy),
         )
         self.metrics.win_rate.set(float(snap.win_rate))
+        self.dashboard.note_ledger(snap)
         if self.mon.json_logs:
             self.logger.emit("ledger", **snap.as_dict())
 
@@ -240,6 +251,14 @@ class Observability:
             )
         self.metrics.signals.labels(decision=decision, reason=reason).inc()
         self.observe_signal_latency(latency_ms)
+        self.dashboard.note_decision(
+            {
+                **result,
+                "market_id": market_id,
+                "accepted": accepted,
+                "reason": reason,
+            }
+        )
         if hms is not None:
             tier = "unknown"
             nested_hms = opp.get("hms")
@@ -397,6 +416,7 @@ class Observability:
             self.health.kill_switch = bool(kills.tripped)
             self.health.kill_reason = kills.reason.value if kills.reason else None
             self.metrics.kill.set(1 if kills.tripped else 0)
+        feeds: dict[str, float | None] = {}
         if clock is not None:
             known = clock.samples()
             for feed in ("gamma", "clob_book", "clob_fees", "market_ws", "user_ws", "rtds", "sports_ws"):
@@ -407,18 +427,44 @@ class Observability:
                 healthy = age is None or age <= sample.max_age_ms
                 # Snapshot only — do not re-alert stale on every cycle end.
                 value = 1.0 if healthy else 0.0
+                feeds[feed] = value
                 self.metrics.ws_health.labels(feed=feed).set(value)
                 if feed == "rtds":
                     self.metrics.rtds_health.set(value)
                 elif feed == "sports_ws":
                     self.metrics.sports_health.set(value)
+        if feeds:
+            self.dashboard.note_feeds(feeds)
         tiers: dict[str, int] = {}
-        for audit in getattr(pipe, "audits", []) or []:
+        audits = list(getattr(pipe, "audits", []) or [])
+        fresh = audits[self._audit_cursor :]
+        self._audit_cursor = len(audits)
+        hot_rows: list[dict[str, Any]] = []
+        for audit in audits:
             tier = getattr(audit, "tier", None)
             if tier:
                 tiers[str(tier)] = tiers.get(str(tier), 0) + 1
+        for audit in fresh:
+            extra = getattr(audit, "extra", None)
+            extra_map: dict[str, Any] = extra if isinstance(extra, dict) else {}
+            signal_raw = extra_map.get("signal")
+            signal: dict[str, Any] = signal_raw if isinstance(signal_raw, dict) else {}
+            audit_tier = getattr(audit, "tier", None)
+            hot_rows.append(
+                {
+                    "market_id": getattr(audit, "market_id", ""),
+                    "tier": str(audit_tier) if audit_tier else None,
+                    "hms": getattr(audit, "hms", None),
+                    "decision": "TRADE" if getattr(audit, "accepted", False) else "SKIP",
+                    "reason": getattr(audit, "reason", None),
+                    "reason_codes": signal.get("reason_codes") or [getattr(audit, "reason", "NO_TRADE")],
+                    "spread_regime": signal.get("spread_regime"),
+                }
+            )
         if tiers:
             self.set_hot_markets(tiers)
+        if hot_rows:
+            self.dashboard.note_cycle(hot_rows)
         self._sync_ready()
 
 

@@ -15,6 +15,7 @@ from hotflow.marketdata.sports_cache import SportsGameCache
 from hotflow.marketdata.sports_fixtures import default_sports_cache_fixtures
 from hotflow.marketdata.twap_cache import TwapPrintCache
 from hotflow.marketdata.twap_fixtures import default_paper_fixtures
+from hotflow.monitoring.dashboard import DASHBOARD_PORT
 from hotflow.monitoring.observer import Observability, http_enabled
 from hotflow.pipeline import (
     PaperPipeline,
@@ -54,14 +55,52 @@ def _prepare_mock_config(cfg):
     return cfg
 
 
-def _observability(cfg, *, serve: bool) -> Observability:
+def _announce_http(obs: Observability) -> None:
+    addr = obs.http_addr
+    if addr is None:
+        return
+    host, port = addr
+    typer.echo(
+        f"dashboard http://{host}:{port}/  metrics=/metrics health=/health ready=/ready events=/events"
+    )
+
+
+def _observability(
+    cfg,
+    *,
+    serve: bool,
+    dashboard: bool = False,
+    bind: str | None = None,
+    port: int | None = None,
+) -> Observability:
     obs = Observability.from_config(cfg, announce_restart=True)
-    if serve or http_enabled(cfg):
-        obs.start_http()
-        addr = obs.http_addr
-        if addr is not None:
-            typer.echo(f"metrics http://{addr[0]}:{addr[1]}/metrics health=/health ready=/ready")
+    if serve or dashboard or http_enabled(cfg):
+        listen = port
+        if dashboard and not serve:
+            if listen is None:
+                listen = int(getattr(cfg.monitoring, "dashboard_port", DASHBOARD_PORT))
+            obs.start_dashboard(bind=bind, port=listen)
+        else:
+            obs.start_http(bind=bind, port=listen)
+        _announce_http(obs)
     return obs
+
+
+def _maybe_hold(obs: Observability, *, hold: bool) -> None:
+    if obs.http_addr is None:
+        return
+    if not hold:
+        obs.stop_http()
+        return
+    host, port = obs.http_addr
+    typer.echo(f"holding dashboard at http://{host}:{port}/  Ctrl+C to stop")
+    import time
+
+    try:
+        while True:
+            time.sleep(3600)
+    except KeyboardInterrupt:
+        obs.stop_http()
 
 
 @app.command()
@@ -79,7 +118,7 @@ def scan(
         False, "--sports-live", help="Attach public Sports WS subscriber briefly (PAPER only)"
     ),
     out: Path | None = typer.Option(None, "--out"),
-    serve_metrics: bool = typer.Option(False, "--serve-metrics", help="Bind localhost /metrics /health /ready"),
+    serve_metrics: bool = typer.Option(False, "--serve-metrics", help="Bind localhost / + /metrics /health /ready"),
 ) -> None:
     """Scan Gamma + public CLOB and write a report. Never places live orders."""
     cfg = load_config(config)
@@ -141,7 +180,15 @@ def paper_run(
         False, "--sports-live", help="Attach public Sports WS subscriber briefly (PAPER only)"
     ),
     out: Path | None = typer.Option(None, "--out"),
-    serve_metrics: bool = typer.Option(False, "--serve-metrics", help="Bind localhost /metrics /health /ready"),
+    serve_metrics: bool = typer.Option(False, "--serve-metrics", help="Bind localhost / + /metrics /health /ready"),
+    dashboard: bool = typer.Option(
+        False, "--dashboard", help="Bind paper browser UI (default 127.0.0.1:9109) + keep /metrics"
+    ),
+    hold: bool = typer.Option(
+        True, "--hold/--no-hold", help="Keep the dashboard HTTP server after cycles finish"
+    ),
+    bind: str | None = typer.Option(None, "--bind", help="Dashboard / metrics bind (default 127.0.0.1)"),
+    port: int | None = typer.Option(None, "--port", help="Override dashboard or metrics port"),
     flatten: bool = typer.Option(
         False, "--flatten", help="Close paper positions at last observed mids (explicit marks only)"
     ),
@@ -160,7 +207,7 @@ def paper_run(
     if mock:
         cfg = _prepare_mock_config(cfg)
     store = _store(cfg)
-    obs = _observability(cfg, serve=serve_metrics)
+    obs = _observability(cfg, serve=serve_metrics, dashboard=dashboard, bind=bind, port=port)
     session = PaperSession(
         cfg,
         store,
@@ -170,6 +217,7 @@ def paper_run(
         sports_cache_path=str(sports_cache) if sports_cache else None,
         use_news_fixtures=news_fixtures,
     )
+    session.obs.dashboard.note_ledger(session.ledger.snapshot())
     for _cycle in range(max(1, cycles)):
         if mock:
             markets = mock_markets()
@@ -210,6 +258,8 @@ def paper_run(
         f"equity={snap.equity:.4f} realized={snap.realized_pnl:.4f} "
         f"win_rate={snap.win_rate:.3f} report={target}"
     )
+    if dashboard:
+        _maybe_hold(obs, hold=hold)
 
 
 @app.command("rtds-cache")
@@ -462,7 +512,7 @@ def shadow(
     mock: bool = typer.Option(True, "--mock", help="Documented fixtures only"),
     cycles: int = typer.Option(1, "--cycles"),
     out: Path | None = typer.Option(None, "--out"),
-    serve_metrics: bool = typer.Option(False, "--serve-metrics", help="Bind localhost /metrics /health /ready"),
+    serve_metrics: bool = typer.Option(False, "--serve-metrics", help="Bind localhost / + /metrics /health /ready"),
     compare_paper: bool = typer.Option(
         False, "--compare-paper", help="Same-fixture paper fills vs shadow would_* (no live-edge claim)"
     ),
@@ -626,6 +676,10 @@ def paper_soak(
     config: Path | None = typer.Option(None, "--config", "-c"),
     cycles: int = typer.Option(5, "--cycles"),
     serve_metrics: bool = typer.Option(False, "--serve-metrics"),
+    dashboard: bool = typer.Option(False, "--dashboard", help="Bind paper browser UI while soaking"),
+    hold: bool = typer.Option(True, "--hold/--no-hold", help="Keep dashboard HTTP after the soak"),
+    bind: str | None = typer.Option(None, "--bind"),
+    port: int | None = typer.Option(None, "--port"),
     kill_drill: bool = typer.Option(True, "--kill-drill/--no-kill-drill"),
     acknowledge: str = typer.Option(
         "operator confirmed recover",
@@ -657,8 +711,9 @@ def paper_soak(
             raise typer.BadParameter("paper-soak --mixed refuses LIVE mode")
         cfg = _prepare_mock_config(cfg)
         cfg.trading.mode = "paper"
-        obs = _observability(cfg, serve=serve_metrics)
+        obs = _observability(cfg, serve=serve_metrics, dashboard=dashboard, bind=bind, port=port)
         session = PaperSession(cfg, _store(cfg), obs=obs, use_twap_fixtures=True)
+        session.obs.dashboard.note_ledger(session.ledger.snapshot())
         meta = run_mixed_paper_soak(session, cycles=cycles)
         payload = session.report()
         payload.update(meta)
@@ -684,6 +739,8 @@ def paper_soak(
             f"near_resolution_overlay={(totals.get('overlay_applied') or {}).get('near_resolution', 0)} "
             f"equity={snap.equity:.4f} live=false report={target}"
         )
+        if dashboard:
+            _maybe_hold(obs, hold=hold)
         return
     if long or target_closes is not None:
         from hotflow.portfolio.long_soak import DEFAULT_TARGET_CLOSES, run_labeled_long_soak
@@ -694,8 +751,9 @@ def paper_soak(
             raise typer.BadParameter("paper-soak --long refuses LIVE mode")
         cfg = _prepare_mock_config(cfg)
         cfg.trading.mode = "paper"
-        obs = _observability(cfg, serve=serve_metrics)
+        obs = _observability(cfg, serve=serve_metrics, dashboard=dashboard, bind=bind, port=port)
         session = PaperSession(cfg, _store(cfg), obs=obs, use_twap_fixtures=True)
+        session.obs.dashboard.note_ledger(session.ledger.snapshot())
         target_n = target_closes or DEFAULT_TARGET_CLOSES
         meta = run_labeled_long_soak(session, target_closes=target_n)
         payload = session.report()
@@ -716,6 +774,8 @@ def paper_soak(
             f"paper-soak long origin={meta.get('origin')} closed={snap.closed_count} "
             f"target={target_n} fail_safe={meta.get('fail_safe')} live=false report={target}"
         )
+        if dashboard:
+            _maybe_hold(obs, hold=hold)
         return
     paper_run(
         config=config,
@@ -727,6 +787,10 @@ def paper_soak(
         sports_live=False,
         out=out,
         serve_metrics=serve_metrics,
+        dashboard=dashboard,
+        hold=hold,
+        bind=bind,
+        port=port,
         flatten=True,
         kill_drill=kill_drill,
         acknowledge=acknowledge,
@@ -739,7 +803,7 @@ def serve_metrics_cmd(
     bind: str | None = typer.Option(None, "--bind", help="Default 127.0.0.1"),
     port: int | None = typer.Option(None, "--port", help="Default monitoring.prometheus_port"),
 ) -> None:
-    """Optional localhost scrape: /metrics /health /ready. PAPER only. No orders."""
+    """Optional localhost scrape: /  /metrics /health /ready. PAPER only. No orders."""
     import time
 
     cfg = load_config(config)
@@ -748,7 +812,9 @@ def serve_metrics_cmd(
     obs = Observability.from_config(cfg, announce_restart=True)
     server = obs.start_http(bind=bind, port=port)
     host, listen = server.server_address[:2]
-    typer.echo(f"serving http://{host}:{listen}/metrics /health /ready mode={cfg.trading.mode}")
+    typer.echo(
+        f"serving http://{host}:{listen}/  /metrics /health /ready /events mode={cfg.trading.mode}"
+    )
     try:
         while True:
             time.sleep(3600)
@@ -952,6 +1018,60 @@ def skip_audit_cmd(
     write_report(target, body)
     typer.echo(format_skip_audit(body))
     typer.echo(f"report={target} production_changed=False")
+
+
+@app.command()
+def dashboard(
+    config: Path | None = typer.Option(None, "--config", "-c"),
+    mock: bool = typer.Option(
+        True, "--mock/--no-mock", help="Documented fixtures (default). --no-mock scans public APIs"
+    ),
+    cycles: int = typer.Option(1, "--cycles"),
+    idle: bool = typer.Option(False, "--idle", help="Serve the UI only; do not start a paper session"),
+    bind: str | None = typer.Option(None, "--bind", help="Default 127.0.0.1"),
+    port: int | None = typer.Option(None, "--port", help="Default monitoring.dashboard_port (9109)"),
+    hold: bool = typer.Option(True, "--hold/--no-hold"),
+    flatten: bool = typer.Option(False, "--flatten"),
+    news_fixtures: bool = typer.Option(False, "--news-fixtures"),
+    out: Path | None = typer.Option(None, "--out"),
+) -> None:
+    """Localhost paper watch UI. PAPER only. Never transmits LIVE orders."""
+    cfg = load_config(config)
+    if cfg.trading.mode.lower() == "live":
+        raise typer.BadParameter("dashboard refuses LIVE mode")
+    if idle:
+        obs = _observability(cfg, serve=False, dashboard=True, bind=bind, port=port)
+        _maybe_hold(obs, hold=hold)
+        return
+    paper_run(
+        config=config,
+        cycles=cycles,
+        mock=mock,
+        twap_cache=None,
+        sports_cache=None,
+        rtds_live=False,
+        sports_live=False,
+        out=out,
+        serve_metrics=False,
+        dashboard=True,
+        hold=hold,
+        bind=bind,
+        port=port,
+        flatten=flatten,
+        kill_drill=False,
+        acknowledge="",
+        news_fixtures=news_fixtures,
+    )
+
+
+@app.command()
+def ci() -> None:
+    """Local CI source of truth: ruff, mypy, pytest, paper-run --mock, secret hygiene."""
+    from hotflow.ci import run_local_ci
+
+    code = run_local_ci()
+    if code != 0:
+        raise typer.Exit(code=code)
 
 
 @app.command()

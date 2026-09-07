@@ -69,10 +69,13 @@ hotflow decay --report reports/paper-soak-mixed-*.json
 hotflow skip-audit
 
 # Optional localhost observability (PAPER only; off by default)
-hotflow serve-metrics
-hotflow paper-run --mock --serve-metrics
+hotflow dashboard --mock                 # browser UI on http://127.0.0.1:9109/
+hotflow paper-run --mock --dashboard
+hotflow serve-metrics                    # same UI on :9108 plus /metrics
 # scrape http://127.0.0.1:9108/metrics  /health  /ready
 ```
+
+See [`dashboards/README.md`](dashboards/README.md) and [`docs/ci.md`](docs/ci.md).
 
 Reports land in `reports/`. SQLite state lands in `data/hotflow.sqlite`.
 
@@ -119,13 +122,24 @@ Signing is **not implemented**; `place_order` / `cancel_order` refuse.
 
 ## Tests and CI
 
+Local pytest / ruff / mypy are the source of truth. GitHub-hosted
+`ubuntu-latest` is **billing-locked** on this account — do not rely on
+Actions minutes.
+
 ```bash
+make ci                    # ruff + mypy + pytest + paper-run --mock + hygiene
+# or:
+bash scripts/ci_local.sh
+hotflow ci
+
 pytest -q
 ruff check src tests scripts
 mypy src/hotflow
 ```
 
-GitHub Actions runs lint, typecheck, pytest, and a mock paper-run smoke.
+Free remote CI: mirror the repo to GitLab.com and use [`.gitlab-ci.yml`](.gitlab-ci.yml)
+(shared runners, no GitHub minutes). Details: [`docs/ci.md`](docs/ci.md).
+The `.github/workflows/ci.yml` file is kept for history; push triggers are off.
 
 ## Package layout
 
@@ -143,7 +157,7 @@ by default; optional unauthenticated live client off). WS reconnect/heartbeat,
 event-driven backtester (`hotflow backtest --fixture`), shadow
 `would_buy` / `would_sell` logs, Prometheus + JSON logs, and the offline
 tuner stay in PAPER/BACKTEST/SHADOW (no LIVE). JSON logs redact secrets.
-Prometheus + `/health` `/ready` are localhost-only and default-off.
+Prometheus + `/` dashboard + `/health` `/ready` are localhost-only and default-off.
 
 ## TWAP paper path
 

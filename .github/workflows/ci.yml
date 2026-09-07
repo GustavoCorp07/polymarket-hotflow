@@ -1,11 +1,19 @@
+# LOCAL SOURCE OF TRUTH: `make ci` / `scripts/ci_local.sh` / `hotflow ci`
+#
+# GitHub-hosted `ubuntu-latest` jobs cannot start on this account (billing lock).
+# Push / pull_request triggers are disabled so PRs do not queue failing hosted minutes.
+# Free remote path: mirror the repo to GitLab.com and use `.gitlab-ci.yml` (shared runners).
+# Optional: attach a self-hosted runner and uncomment `smoke-self-hosted` below
+# IF workflow_dispatch still works after a partial billing unlock.
 name: ci
 
 on:
-  push:
-  pull_request:
+  workflow_dispatch:
 
 jobs:
-  smoke:
+  smoke-hosted:
+    name: smoke (GitHub-hosted — billing-locked)
+    if: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,7 +29,7 @@ jobs:
       - name: Tests
         run: pytest -q
       - name: Paper mock smoke
-        run: hotflow paper-run --mock --out reports/ci-paper.json
+        run: hotflow paper-run --mock --no-hold --out reports/ci-paper.json
       - name: Backtest interface smoke
         run: python -c "from hotflow.backtest import NullBacktester; print(NullBacktester)"
       - name: Secret hygiene
@@ -30,3 +38,12 @@ jobs:
           # Real PEM headers only — do not use a pattern that matches this workflow line.
           ! git grep -nE -e '-----BEGIN ([A-Z0-9]+ )?PRIVATE KEY-----' \
             -- ':!.github' ':!docs' ':!tests/test_kimi.py' ':!src/hotflow/ai_research/kimi_client.py'
+
+  # Uncomment if a free self-hosted runner is registered and dispatch is allowed.
+  # smoke-self-hosted:
+  #   name: smoke (self-hosted runner)
+  #   runs-on: self-hosted
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Local CI
+  #       run: bash scripts/ci_local.sh

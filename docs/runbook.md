@@ -31,7 +31,9 @@ hotflow performance --report reports/paper-soak-long-*.json
 hotflow decay --report reports/paper-soak-long-*.json
 hotflow walk-forward --report reports/paper-soak-long-*.json
 hotflow skip-audit
-pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py tests/test_weather_gamma_fixtures.py tests/test_esports.py tests/test_sports_cache.py tests/test_backtest.py tests/test_recorder.py tests/test_tuner.py tests/test_observability.py tests/test_paper_ledger.py tests/test_paper_gates.py tests/test_shadow_gates.py tests/test_failure_injection.py tests/test_live_gates.py tests/test_security_hygiene.py tests/test_readiness.py tests/test_news_engine.py tests/test_performance.py tests/test_paper_long_soak.py tests/test_mixed_paper_soak.py tests/test_mixed_walkforward.py tests/test_walkforward.py tests/test_microstructure.py tests/test_signal_quality.py
+hotflow dashboard --mock
+make ci
+pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py tests/test_weather_gamma_fixtures.py tests/test_esports.py tests/test_sports_cache.py tests/test_backtest.py tests/test_recorder.py tests/test_tuner.py tests/test_observability.py tests/test_paper_ledger.py tests/test_paper_gates.py tests/test_shadow_gates.py tests/test_failure_injection.py tests/test_live_gates.py tests/test_security_hygiene.py tests/test_readiness.py tests/test_news_engine.py tests/test_performance.py tests/test_paper_long_soak.py tests/test_mixed_paper_soak.py tests/test_mixed_walkforward.py tests/test_walkforward.py tests/test_microstructure.py tests/test_signal_quality.py tests/test_dashboard.py
 pytest -q
 ```
 
@@ -304,11 +306,14 @@ replayed with `replay_events(...)`.
 
 Optional localhost scrape. Default bind is `127.0.0.1` (not a Polymarket
 endpoint). `trading.mode` stays **paper**. The HTTP server is **off** unless
-`--serve-metrics`, `monitoring.http_enabled: true`, or `HOTFLOW_METRICS=1`.
+`--serve-metrics`, `--dashboard`, `monitoring.http_enabled: true`, or `HOTFLOW_METRICS=1`.
 
 ```bash
-hotflow serve-metrics                  # /metrics /health /ready on :9108
+hotflow dashboard --mock               # browser UI on :9109  (/  /api/state  /events)
+hotflow paper-run --mock --dashboard
+hotflow serve-metrics                  # / + /metrics /health /ready on :9108
 hotflow paper-run --mock --serve-metrics
+curl -sS http://127.0.0.1:9109/api/state
 curl -sS http://127.0.0.1:9108/health
 curl -sS http://127.0.0.1:9108/ready
 curl -sS http://127.0.0.1:9108/metrics | head

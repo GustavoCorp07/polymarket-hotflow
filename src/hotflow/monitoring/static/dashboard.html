@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HOTFLOW paper dashboard</title>
+  <style>
+    :root {
+      --bg: #0c1110;
+      --panel: #141a18;
+      --line: #2a3530;
+      --ink: #d7e4dc;
+      --muted: #7f9188;
+      --paper: #d6b25e;
+      --ok: #3dba7a;
+      --skip: #d08a3a;
+      --bad: #d45b4a;
+      --cyan: #6ec8c0;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bg); color: var(--ink); font: 13px/1.45 ui-sans-serif, "Segoe UI", system-ui, sans-serif; }
+    header {
+      display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px;
+      padding: 16px 20px; border-bottom: 1px solid var(--line); background: #101614;
+    }
+    h1 { margin: 0; font-size: 15px; letter-spacing: .12em; text-transform: uppercase; }
+    h1 span { color: var(--paper); }
+    .sub { color: var(--muted); font-size: 12px; }
+    .pills { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .pill {
+      border: 1px solid var(--line); padding: 3px 8px; border-radius: 999px;
+      font-variant-numeric: tabular-nums; letter-spacing: .04em;
+    }
+    .pill.on { border-color: #3a6a4e; color: var(--ok); }
+    .pill.off { border-color: #6a3a34; color: var(--bad); }
+    .pill.warn { border-color: #6a5428; color: var(--paper); }
+    main { padding: 16px 20px 32px; display: grid; gap: 16px; }
+    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+    .card { background: var(--panel); border: 1px solid var(--line); padding: 12px 14px; }
+    .label { color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+    .value { font-size: 22px; font-variant-numeric: tabular-nums; margin-top: 4px; }
+    .hint { color: var(--muted); font-size: 11px; margin-top: 4px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { color: var(--muted); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; font-weight: 600; }
+    .trade { color: var(--ok); font-weight: 650; }
+    .skip { color: var(--skip); font-weight: 650; }
+    .shadow { color: var(--cyan); }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+    .feeds { display: flex; flex-wrap: wrap; gap: 8px; }
+    footer { color: var(--muted); font-size: 11px; padding: 0 20px 24px; }
+    .empty { color: var(--muted); padding: 10px 8px; }
+    code { color: var(--cyan); }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>HOTFLOW <span>PAPER</span> dashboard</h1>
+      <div class="sub">Local watch surface — paper ledger only. LIVE transmit never. No secrets.</div>
+    </div>
+    <div class="pills" id="status-pills"></div>
+  </header>
+  <main>
+    <section class="kpis" id="kpis"></section>
+    <section class="card">
+      <div class="label">Feed health</div>
+      <div class="feeds" id="feeds"><div class="empty">No feed gauges yet (idle or --mock without live sockets).</div></div>
+    </section>
+    <section class="card">
+      <div class="label">Last cycle hot markets</div>
+      <div id="hot"></div>
+    </section>
+    <section class="card">
+      <div class="label">Recent TRADE / SKIP</div>
+      <div class="hint">Primary reason plus Parte 46/47 reason_codes and spread_regime slices.</div>
+      <div id="recent"></div>
+    </section>
+  </main>
+  <footer>
+    Numbers are the in-process paper session ledger (FILL/MARK/FLATTEN), not venue PnL.
+    Updates: SSE <code>/events</code> with short-poll fallback on <code>/api/state</code>.
+    Same process keeps <code>/metrics</code> <code>/health</code> <code>/ready</code>.
+    <span id="meta"></span>
+  </footer>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    function fmt(n, digits) {
+      if (n === null || n === undefined || n === "") return "—";
+      const x = Number(n);
+      if (!Number.isFinite(x)) return "—";
+      return x.toFixed(digits);
+    }
+    function pct(n) {
+      if (n === null || n === undefined || n === "") return "—";
+      const x = Number(n);
+      if (!Number.isFinite(x)) return "—";
+      return (x * 100).toFixed(2) + "%";
+    }
+    function esc(s) {
+      return String(s ?? "").replace(/[&<>"']/g, (c) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+      }[c]));
+    }
+    function pill(text, cls) {
+      return `<span class="pill ${cls}">${esc(text)}</span>`;
+    }
+    function render(data) {
+      const h = data.health || {};
+      const ks = data.kill_switch || {};
+      const gates = data.live_gates || {};
+      const led = data.ledger || {};
+      const mode = data.mode || h.mode || "paper";
+      $("status-pills").innerHTML = [
+        pill("mode " + mode, mode === "paper" ? "on" : "off"),
+        pill(ks.tripped ? ("kill " + (ks.reason || "TRIPPED")) : "kill closed", ks.tripped ? "off" : "on"),
+        pill(gates.closed ? "live gates CLOSED" : "live gates OPEN", gates.closed ? "on" : "off"),
+        pill(h.ready ? "ready" : "not ready", h.ready ? "on" : "warn"),
+        pill("cycles " + (data.cycle_count || 0), "warn"),
+      ].join("");
+      $("kpis").innerHTML = [
+        ["Equity", fmt(led.equity, 2), "paper ledger"],
+        ["Realized PnL", fmt(led.realized_pnl, 4), "closed fills"],
+        ["Unrealized PnL", fmt(led.unrealized_pnl, 4), "last marks"],
+        ["Drawdown", pct(led.drawdown), "from peak equity"],
+        ["Open positions", String(data.open_positions ?? led.open_positions ?? 0), "tokens with qty"],
+        ["Win rate", pct(led.win_rate), (led.closed_count || 0) + " closed"],
+      ].map(([k, v, hint]) =>
+        `<article class="card"><div class="label">${esc(k)}</div><div class="value">${esc(v)}</div><div class="hint">${esc(hint)}</div></article>`
+      ).join("");
+      const feeds = data.feeds || {};
+      const keys = Object.keys(feeds);
+      $("feeds").innerHTML = keys.length
+        ? keys.map((name) => {
+            const v = feeds[name];
+            const ok = Number(v) >= 1;
+            return pill(name + (v === null || v === undefined ? " n/a" : (ok ? " fresh" : " stale")), ok ? "on" : "off");
+          }).join("")
+        : `<div class="empty">No feed gauges yet (idle or --mock without live sockets).</div>`;
+      const hot = data.hot_markets || [];
+      $("hot").innerHTML = hot.length ? `<table><thead><tr>
+        <th>Market</th><th>Tier</th><th>HMS</th><th>Decision</th><th>Reason</th><th>Spread</th>
+      </tr></thead><tbody>${hot.map((row) => `<tr>
+        <td class="mono">${esc(row.market_id)}</td>
+        <td>${esc(row.tier || "—")}</td>
+        <td>${esc(fmt(row.hms, 1))}</td>
+        <td class="${esc((row.decision || "").toLowerCase())}">${esc(row.decision)}</td>
+        <td class="mono">${esc(row.reason || "")}</td>
+        <td>${esc(row.spread_regime || "—")}</td>
+      </tr>`).join("")}</tbody></table>` : `<div class="empty">No cycle yet. Run paper-run --mock or keep this page open.</div>`;
+      const recent = data.recent || [];
+      $("recent").innerHTML = recent.length ? `<table><thead><tr>
+        <th>When</th><th>Decision</th><th>Market</th><th>Primary</th><th>reason_codes</th><th>spread_regime</th>
+      </tr></thead><tbody>${recent.map((row) => `<tr>
+        <td class="mono">${esc((row.ts || "").replace("T", " ").slice(0, 19))}</td>
+        <td class="${esc((row.decision || "").toLowerCase())}">${esc(row.decision)}</td>
+        <td class="mono">${esc(row.market_id)}</td>
+        <td>${esc(row.reason)}</td>
+        <td class="mono">${esc((row.reason_codes || []).join(", "))}</td>
+        <td>${esc(row.spread_regime || "—")}</td>
+      </tr>`).join("")}</tbody></table>` : `<div class="empty">No TRADE/SKIP rows yet.</div>`;
+      $("meta").textContent = " gen=" + (data.generation || 0) + " updated=" + (data.updated_at || "");
+    }
+    let pollTimer = null;
+    function poll() {
+      fetch("/api/state", { cache: "no-store" })
+        .then((r) => r.json())
+        .then(render)
+        .catch(() => {});
+    }
+    function startPoll() {
+      if (pollTimer) return;
+      pollTimer = setInterval(poll, 1500);
+    }
+    poll();
+    if (window.EventSource) {
+      const es = new EventSource("/events");
+      es.onmessage = (ev) => {
+        try { render(JSON.parse(ev.data)); } catch (err) { /* keep last frame */ }
+      };
+      es.onerror = () => { startPoll(); };
+    } else {
+      startPoll();
+    }
+  </script>
+</body>
+</html>

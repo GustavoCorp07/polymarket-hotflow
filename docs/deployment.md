@@ -6,10 +6,13 @@ Paper Docker:
 docker compose up --build
 ```
 
-CI (`.github/workflows/ci.yml`): lint, typecheck, pytest, mock paper-run,
-backtest smoke, secret-hygiene grep.
+CI source of truth is local: `make ci` / `scripts/ci_local.sh` / `hotflow ci`
+(lint, typecheck, pytest, mock paper-run, backtest smoke, secret-hygiene).
+GitHub-hosted `ubuntu-latest` is billing-locked — see [`docs/ci.md`](ci.md).
+Free remote: GitLab.com shared runners via `.gitlab-ci.yml`.
 
-Optional localhost metrics (`hotflow serve-metrics`, port 9108): `/metrics`,
+Optional localhost metrics + paper UI (`hotflow dashboard`, port 9109;
+`hotflow serve-metrics`, port 9108): `/`, `/api/state`, `/events`, `/metrics`,
 `/health`, `/ready`. Default-off. Bind `127.0.0.1`. Not a venue API.
 
 LIVE deploy is a **release gate**, not a compose default. Do not put credentials
