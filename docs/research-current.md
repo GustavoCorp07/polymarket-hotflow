@@ -239,9 +239,35 @@ HOTFLOW paper sports path:
 - parses league/teams from Gamma metadata using only documented league names
 - never maps `football` → `Soccer`
 - injects official-shape game frames in pytest; live client stays **off**
-  (`sports.live_public_client: false`)
+  (`sports.live_public_client: false`, `feeds.sports_ws.subscriber_enabled: false`)
 - per-sport models: NBA/CBB basketball ≠ Soccer; Tennis/NFL/… → `UNSUPPORTED_SPORT`
-- missing rules or game state → `SPORTS_RULES_UNKNOWN` / `SPORTS_STATE_MISSING`
+- missing / stale official-shape state → `SPORTS_STATE_MISSING` /
+  `SPORTS_STATE_STALE` (never invent a score)
+- unparseable rules → `SPORTS_RULES_UNKNOWN`
+
+**PAPER Sports WS cache subscriber** (`PublicSportsSubscriber` + `SportsGameCache`):
+
+- Default `feeds.sports_ws.subscriber_enabled: false` — paper-run/scan do **not**
+  open a socket unless `--sports-live` or that flag is set
+- Caches latest official-shape game objects keyed by `gameId`; undocumented
+  leagues are dropped. Live `leagueAbbreviation` is case-folded onto the
+  documented set only (`mlb` → `MLB`). Names such as `spl` or `challenger`
+  are not invented into Soccer/Tennis.
+- **No subscribe frame** (official). Server `ping` → client `pong`. After
+  disconnect: reconnect only (no snapshot / replay)
+- `hotflow sports-cache` defaults to `--mock` (official-shape fixtures on disk);
+  `--live --seconds N` is the optional unauthenticated collect
+- `hotflow paper-run --sports-cache data/sports_ws_cache.json` injects a cache
+  without a socket
+- pytest uses `InjectedFrameTransport` only — never opens the Sports WS
+
+A short PAPER live collect from this environment **did connect** to
+`wss://sports-api.polymarket.com/ws`. The wire also emits
+`leagueAbbreviation` values that are **not** in the documented set
+(`spl`, `challenger`, `tur`, …); those are dropped. Documented names may
+arrive lowercase (`mlb`) and are case-folded only. A redacted official-field
+sample is in `tests/fixtures/sports_ws_live_sample.json`. Extra wire keys
+such as `eventState` are ignored. Data remains informational.
 
 ### Weather (no official Polymarket observation API)
 

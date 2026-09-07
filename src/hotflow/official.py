@@ -43,6 +43,21 @@ SPORTS_CLIENT_PONG = "pong"
 SPORTS_DOCUMENTED_LEAGUES = frozenset(
     {"NFL", "NHL", "MLB", "NBA", "CBB", "CFB", "Soccer", "Esports", "Tennis"}
 )
+_SPORTS_LEAGUE_CASEFOLD = {item.lower(): item for item in SPORTS_DOCUMENTED_LEAGUES}
+
+
+def canonicalize_sports_league(raw: str | None) -> str | None:
+    """Map a Sports WS leagueAbbreviation onto the documented spelling.
+
+    Case-fold only (`mlb` → `MLB`). Do not invent leagues such as `spl` or
+    `challenger`.
+    """
+    if not raw:
+        return None
+    text = raw.strip()
+    if text in SPORTS_DOCUMENTED_LEAGUES:
+        return text
+    return _SPORTS_LEAGUE_CASEFOLD.get(text.lower())
 
 # Official RTDS TWAP topics (not a homemade TWAP)
 # https://docs.polymarket.com/market-data/chainlink-twap

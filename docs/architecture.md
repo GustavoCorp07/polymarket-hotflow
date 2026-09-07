@@ -111,7 +111,10 @@ PnL velocity, regime labels, Parte 46 signal-quality JSON.
 - Weather FV consumes a labeled forecast distribution vs implied. Forecasts
   are never the official resolver. No invented weather API.
 - Sports: official WS URL + server-`ping`/client-`pong`. Mock frames in
-  pytest. `NBABasketballModel` ≠ `SoccerModel`. Unsupported sports refuse.
+  pytest. Optional short public collect (`PublicSportsSubscriber`) is
+  default-off. `SportsGameCache` keys official-shape updates by `gameId`.
+  Fresh cache → score; missing/stale → skip. `NBABasketballModel` ≠
+  `SoccerModel`. Unsupported sports refuse.
 - Wired into discovery → HMS → fair value → risk → paper. Crypto TWAP path
   unchanged. Toggles: `weather.enabled`, `sports.enabled` (live sports
   client off).

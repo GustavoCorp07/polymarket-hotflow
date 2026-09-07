@@ -1,0 +1,19 @@
+{
+  "source": "live_sports_ws",
+  "informational": true,
+  "collected_at": "2026-09-07T18:18:19.296334+00:00",
+  "note": "Official Sports WS fields only. PAPER collect. No credentials. Case-folded documented leagues only. eventState dropped. May be delayed or wrong.",
+  "games": [
+    {
+      "gameId": 10079445,
+      "leagueAbbreviation": "MLB",
+      "homeTeam": "MIA",
+      "awayTeam": "NYM",
+      "status": "InProgress",
+      "live": true,
+      "ended": false,
+      "score": "4-4",
+      "period": "End 3rd"
+    }
+  ]
+}

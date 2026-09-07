@@ -7,15 +7,20 @@ pip install -e ".[dev]"
 hotflow paper-run --mock    # TWAP + weather + NBA sports fixtures, PAPER only
 hotflow rtds-cache --mock   # write official-shape cache (no socket)
 hotflow paper-run --twap-cache data/rtds_twap_cache.json --mock
+hotflow sports-cache --mock # write official-shape Sports WS cache (no socket)
+hotflow paper-run --sports-cache data/sports_ws_cache.json --mock
 hotflow scan
-pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py
+pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py tests/test_sports_cache.py
 pytest -q
 ```
 
 `weather.enabled` / `sports.enabled` default on for paper scoring. They never
-open paid weather APIs. `sports.live_public_client` stays false — pytest
-injects Sports WS frames. Unparseable rules or missing forecast/game state
-skip (`WEATHER_*` / `SPORTS_*` / `UNSUPPORTED_SPORT`).
+open paid weather APIs. `feeds.sports_ws.subscriber_enabled` and
+`--sports-live` stay off unless you want a brief unauthenticated Sports WS
+collect (`hotflow sports-cache --live --seconds 12`). They never enable LIVE
+CLOB orders. Live Sports frames are informational and may be delayed or wrong. Unparseable rules or
+missing/stale forecast/game state skip (`WEATHER_*` / `SPORTS_*` /
+`UNSUPPORTED_SPORT`).
 
 `feeds.rtds.subscriber_enabled` and `--rtds-live` stay off unless you want a
 brief unauthenticated RTDS collect. They never enable LIVE CLOB orders.

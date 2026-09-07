@@ -212,6 +212,16 @@ class RtdsFeedConfig(FeedConfig):
         return lowered
 
 
+class SportsWsFeedConfig(FeedConfig):
+    """Public Sports WS cache. Subscriber is off unless explicitly enabled."""
+
+    subscriber_enabled: bool = False
+    reconnect_max_backoff_s: float = 30.0
+    persist_cache: bool = False
+    cache_path: str = "data/sports_ws_cache.json"
+    collect_seconds: float = 12.0
+
+
 class FeedsConfig(BaseModel):
     gamma: FeedConfig = Field(default_factory=lambda: FeedConfig(max_data_age_ms=30_000))
     clob_book: FeedConfig = Field(
@@ -229,8 +239,8 @@ class FeedsConfig(BaseModel):
     rtds: RtdsFeedConfig = Field(
         default_factory=lambda: RtdsFeedConfig(max_data_age_ms=10_000, ping_interval_s=5)
     )
-    sports_ws: FeedConfig = Field(
-        default_factory=lambda: FeedConfig(max_data_age_ms=15_000, ping_interval_s=5)
+    sports_ws: SportsWsFeedConfig = Field(
+        default_factory=lambda: SportsWsFeedConfig(max_data_age_ms=15_000, ping_interval_s=5)
     )
 
 

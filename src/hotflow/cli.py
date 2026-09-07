@@ -11,6 +11,8 @@ import typer
 
 from hotflow.config import load_config
 from hotflow.execution.live_gate import live_gates_open
+from hotflow.marketdata.sports_cache import SportsGameCache
+from hotflow.marketdata.sports_fixtures import default_sports_cache_fixtures
 from hotflow.marketdata.twap_cache import TwapPrintCache
 from hotflow.marketdata.twap_fixtures import default_paper_fixtures
 from hotflow.pipeline import (
@@ -36,6 +38,12 @@ def _attach_rtds(cfg, mock: bool, rtds_live: bool) -> bool:
     return bool(rtds_live or cfg.feeds.rtds.subscriber_enabled)
 
 
+def _attach_sports(cfg, mock: bool, sports_live: bool) -> bool:
+    if mock:
+        return False
+    return bool(sports_live or cfg.feeds.sports_ws.subscriber_enabled)
+
+
 def _prepare_mock_config(cfg):
     """--mock evaluates several fixtures in one process tick; skip inter-order cooldown."""
     cfg.risk.cooldown_ms = 0
@@ -48,8 +56,14 @@ def scan(
     config: Path | None = typer.Option(None, "--config", "-c"),
     mock: bool = typer.Option(False, "--mock", help="Use documented fixture if network is blocked"),
     twap_cache: Path | None = typer.Option(None, "--twap-cache", help="Inject official-shape TWAP cache JSON"),
+    sports_cache: Path | None = typer.Option(
+        None, "--sports-cache", help="Inject official-shape Sports WS cache JSON"
+    ),
     rtds_live: bool = typer.Option(
         False, "--rtds-live", help="Attach public RTDS subscriber briefly (PAPER only)"
+    ),
+    sports_live: bool = typer.Option(
+        False, "--sports-live", help="Attach public Sports WS subscriber briefly (PAPER only)"
     ),
     out: Path | None = typer.Option(None, "--out"),
 ) -> None:
@@ -58,7 +72,13 @@ def scan(
     if mock:
         cfg = _prepare_mock_config(cfg)
     store = _store(cfg)
-    pipe = PaperPipeline(cfg, store, use_twap_fixtures=mock, cache_path=twap_cache)
+    pipe = PaperPipeline(
+        cfg,
+        store,
+        use_twap_fixtures=mock,
+        cache_path=twap_cache,
+        sports_cache_path=sports_cache,
+    )
 
     async def _run() -> dict:
         if mock:
@@ -73,8 +93,13 @@ def scan(
                 markets=markets,
                 use_network=False,
                 attach_subscriber=_attach_rtds(cfg, mock, rtds_live),
+                attach_sports_subscriber=_attach_sports(cfg, mock, sports_live),
             )
-        return await pipe.run_scan(use_network=True, attach_subscriber=_attach_rtds(cfg, mock, rtds_live))
+        return await pipe.run_scan(
+            use_network=True,
+            attach_subscriber=_attach_rtds(cfg, mock, rtds_live),
+            attach_sports_subscriber=_attach_sports(cfg, mock, sports_live),
+        )
 
     payload = asyncio.run(_run())
     target = out or Path(cfg.storage.reports_dir) / f"scan-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}.json"
@@ -88,8 +113,14 @@ def paper_run(
     cycles: int = typer.Option(1, "--cycles"),
     mock: bool = typer.Option(False, "--mock", help="Documented fixture when network is blocked"),
     twap_cache: Path | None = typer.Option(None, "--twap-cache", help="Inject official-shape TWAP cache JSON"),
+    sports_cache: Path | None = typer.Option(
+        None, "--sports-cache", help="Inject official-shape Sports WS cache JSON"
+    ),
     rtds_live: bool = typer.Option(
         False, "--rtds-live", help="Attach public RTDS subscriber briefly (PAPER only)"
+    ),
+    sports_live: bool = typer.Option(
+        False, "--sports-live", help="Attach public Sports WS subscriber briefly (PAPER only)"
     ),
     out: Path | None = typer.Option(None, "--out"),
 ) -> None:
@@ -102,7 +133,13 @@ def paper_run(
     store = _store(cfg)
     summaries: list[dict[str, Any]] = []
     for _cycle in range(max(1, cycles)):
-        pipe = PaperPipeline(cfg, store, use_twap_fixtures=mock, cache_path=twap_cache)
+        pipe = PaperPipeline(
+            cfg,
+            store,
+            use_twap_fixtures=mock,
+            cache_path=twap_cache,
+            sports_cache_path=sports_cache,
+        )
         if mock:
             results = [
                 pipe.evaluate_market(demo_twap_market(hot=True)),
@@ -121,7 +158,13 @@ def paper_run(
             )
         else:
             summaries.append(
-                asyncio.run(pipe.run_scan(use_network=True, attach_subscriber=_attach_rtds(cfg, mock, rtds_live)))
+                asyncio.run(
+                    pipe.run_scan(
+                        use_network=True,
+                        attach_subscriber=_attach_rtds(cfg, mock, rtds_live),
+                        attach_sports_subscriber=_attach_sports(cfg, mock, sports_live),
+                    )
+                )
             )
     payload = {"cycles": summaries, "mode": cfg.trading.mode, "shadow": cfg.trading.shadow}
     target = out or Path(cfg.storage.reports_dir) / f"paper-run-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}.json"
@@ -161,6 +204,41 @@ def rtds_cache(
     prints = asyncio.run(run_live_public_collect(cache, cfg.feeds.rtds))
     cache.save(target)
     typer.echo(f"rtds-cache live prints={prints} path={target}")
+
+
+@app.command("sports-cache")
+def sports_cache_cmd(
+    config: Path | None = typer.Option(None, "--config", "-c"),
+    mock: bool = typer.Option(
+        True, "--mock/--live", help="Mock injects official-shape fixtures; --live opens public Sports WS"
+    ),
+    seconds: float | None = typer.Option(None, "--seconds", help="Live collect seconds (public Sports WS only)"),
+    out: Path | None = typer.Option(None, "--out"),
+) -> None:
+    """Fill the official-shape Sports WS cache. PAPER data only — never places orders.
+
+    Default is --mock (no socket). --live is the optional unauthenticated Sports
+    reader at wss://sports-api.polymarket.com/ws. Data is informational.
+    """
+    cfg = load_config(config)
+    target = out or Path(cfg.feeds.sports_ws.cache_path)
+    cache = SportsGameCache(max_age_ms=cfg.feeds.sports_ws.max_data_age_ms, path=target, persist=True)
+    if mock:
+        for state in default_sports_cache_fixtures():
+            cache.put(state)
+        cache.save(target)
+        typer.echo(f"sports-cache mock games={len(cache.snapshot()['games'])} path={target}")
+        return
+
+    from hotflow.marketdata.sports_subscriber import run_live_public_sports_collect
+
+    if seconds is not None:
+        cfg.feeds.sports_ws.collect_seconds = seconds
+    prints = asyncio.run(run_live_public_sports_collect(cache, cfg.feeds.sports_ws))
+    cache.save(target)
+    typer.echo(
+        f"sports-cache live accepted={prints} stored={len(cache.snapshot()['games'])} path={target}"
+    )
 
 
 @app.command()

@@ -31,6 +31,7 @@ from hotflow.hotmarket.score import score_hot_market
 from hotflow.hotmarket.watchlist import resource_plan
 from hotflow.marketdata.freshness import FeedClock
 from hotflow.marketdata.rtds_twap import FixtureTwapSource, TwapObservationSource
+from hotflow.marketdata.sports_cache import SportsGameCache, game_state_status
 from hotflow.marketdata.sports_ws import (
     FixtureSportsSource,
     SportsStateSource,
@@ -93,6 +94,36 @@ def make_twap_source(
     return cache
 
 
+def make_sports_source(
+    config: HotflowConfig,
+    *,
+    use_twap_fixtures: bool = False,
+    sports_source: SportsStateSource | None = None,
+    sports_cache_path: str | Path | None = None,
+) -> SportsStateSource:
+    """Fixtures for --mock; otherwise an empty or on-disk official-shape cache.
+
+    Never invents a live score. A missing cache is empty until a subscriber
+    or `--sports-cache` injects official-shape frames.
+    """
+    if sports_source is not None:
+        return sports_source
+    if sports_cache_path:
+        return SportsGameCache.from_path(
+            sports_cache_path, max_age_ms=config.feeds.sports_ws.max_data_age_ms
+        )
+    if use_twap_fixtures:
+        return FixtureSportsSource([default_nba_state(), default_soccer_state()])
+    cache = SportsGameCache(
+        max_age_ms=config.feeds.sports_ws.max_data_age_ms,
+        path=config.feeds.sports_ws.cache_path,
+        persist=config.feeds.sports_ws.persist_cache,
+    )
+    if config.feeds.sports_ws.persist_cache:
+        cache.load()
+    return cache
+
+
 def _intended_shares(market: MarketRecord, config: HotflowConfig, notional: float, price: float) -> float:
     min_size = market.order_min_size or (market.book.min_order_size if market.book else None) or 5.0
     if price <= 0:
@@ -112,6 +143,7 @@ class PaperPipeline:
         cache_path: str | Path | None = None,
         weather_source: WeatherForecastSource | None = None,
         sports_source: SportsStateSource | None = None,
+        sports_cache_path: str | Path | None = None,
     ) -> None:
         self.config = config
         self.kills = KillSwitchBoard()
@@ -136,12 +168,12 @@ class PaperPipeline:
             self.weather_source = src
         else:
             self.weather_source = FixtureWeatherSource()
-        if sports_source is not None:
-            self.sports_source = sports_source
-        elif use_twap_fixtures:
-            self.sports_source = FixtureSportsSource([default_nba_state(), default_soccer_state()])
-        else:
-            self.sports_source = FixtureSportsSource()
+        self.sports_source = make_sports_source(
+            config,
+            use_twap_fixtures=use_twap_fixtures,
+            sports_source=sports_source,
+            sports_cache_path=sports_cache_path,
+        )
 
     def _audit(self, **kwargs: Any) -> SignalAudit:
         row = SignalAudit(session_id=self.config.trading.session_id, **kwargs)
@@ -258,7 +290,21 @@ class PaperPipeline:
                     extra=extras,
                 )
                 return {"accepted": False, "reason": ReasonCode.UNSUPPORTED_SPORT, "league": sports_spec.league}
-            state = self.sports_source.latest(sports_spec) or game_state_from_metadata(sports_spec)
+            cached = self.sports_source.latest(sports_spec)
+            freshness = game_state_status(
+                cached,
+                max_age_ms=self.config.feeds.sports_ws.max_data_age_ms,
+                now=now,
+            )
+            if freshness == "stale":
+                self._audit(
+                    market_id=market.market_id,
+                    accepted=False,
+                    reason=ReasonCode.SPORTS_STATE_STALE,
+                    extra=extras,
+                )
+                return {"accepted": False, "reason": ReasonCode.SPORTS_STATE_STALE}
+            state = cached if freshness == "fresh" else game_state_from_metadata(sports_spec)
             if state is None:
                 self._audit(
                     market_id=market.market_id,
@@ -267,6 +313,8 @@ class PaperPipeline:
                     extra=extras,
                 )
                 return {"accepted": False, "reason": ReasonCode.SPORTS_STATE_MISSING}
+            if cached is not None:
+                self.clock.touch("sports_ws", observed_at=state.last_update)
             extras["sports_state"] = state.model_dump(mode="json")
             extras["sports_model"] = model.sport
             sports_p = model.p_home_win(sports_spec, state)
@@ -516,6 +564,8 @@ class PaperPipeline:
         use_network: bool = True,
         attach_subscriber: bool = False,
         subscriber_transport: Any | None = None,
+        attach_sports_subscriber: bool = False,
+        sports_subscriber_transport: Any | None = None,
     ) -> dict[str, Any]:
         if attach_subscriber:
             from hotflow.marketdata.rtds_subscriber import PublicRtdsSubscriber, run_live_public_collect
@@ -527,12 +577,33 @@ class PaperPipeline:
             )
             self.twap_source = cache
             if subscriber_transport is not None:
-                sub = PublicRtdsSubscriber(
+                rtds_sub = PublicRtdsSubscriber(
                     cache, config=self.config.feeds.rtds, transport=subscriber_transport
                 )
-                await sub.run(duration_s=self.config.feeds.rtds.collect_seconds)
+                await rtds_sub.run(duration_s=self.config.feeds.rtds.collect_seconds)
             else:
                 await run_live_public_collect(cache, self.config.feeds.rtds)
+        if attach_sports_subscriber:
+            from hotflow.marketdata.sports_subscriber import (
+                PublicSportsSubscriber,
+                run_live_public_sports_collect,
+            )
+
+            sports_cache = (
+                self.sports_source
+                if isinstance(self.sports_source, SportsGameCache)
+                else SportsGameCache(max_age_ms=self.config.feeds.sports_ws.max_data_age_ms)
+            )
+            self.sports_source = sports_cache
+            if sports_subscriber_transport is not None:
+                sports_sub = PublicSportsSubscriber(
+                    sports_cache,
+                    config=self.config.feeds.sports_ws,
+                    transport=sports_subscriber_transport,
+                )
+                await sports_sub.run(duration_s=self.config.feeds.sports_ws.collect_seconds)
+            else:
+                await run_live_public_sports_collect(sports_cache, self.config.feeds.sports_ws)
         if markets is None:
             scanner = scanner or UniverseScanner(self.config)
             try:

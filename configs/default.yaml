@@ -151,6 +151,12 @@ feeds:
     critical: false
     # Official Sports WS: server sends text "ping" every 5s; reply "pong" within 10s.
     ping_interval_s: 5.0
+    live_public_client: false
+    subscriber_enabled: false    # do not open a socket unless explicitly enabled
+    reconnect_max_backoff_s: 30.0
+    persist_cache: false
+    cache_path: data/sports_ws_cache.json
+    collect_seconds: 12.0
 
 ai_research:
   base_url: https://api.moonshot.ai/v1

@@ -49,8 +49,12 @@ distinct. Tennis, NFL, esports live models, etc. return `UNSUPPORTED_SPORT`
 instead of reusing basketball/soccer math. Missing rules or game state →
 `SPORTS_RULES_UNKNOWN` / `SPORTS_STATE_MISSING`.
 
-Live public client is **default-off** (`sports.live_public_client: false`).
-pytest injects official-shape frames. Toggle: `sports.enabled`.
+Live public client is **default-off** (`sports.live_public_client: false`,
+`feeds.sports_ws.subscriber_enabled: false`). pytest injects official-shape
+frames. Paper scan can read `SportsGameCache` (injected JSON, `--mock`
+fixtures, or an optional public Sports WS collect). Stale/missing official
+frames skip (`SPORTS_STATE_STALE` / `SPORTS_STATE_MISSING`). Toggle:
+`sports.enabled`.
 
 ## Esports
 

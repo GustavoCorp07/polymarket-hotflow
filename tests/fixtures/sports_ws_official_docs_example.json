@@ -1,0 +1,12 @@
+{
+  "gameId": 5127839,
+  "leagueAbbreviation": "NBA",
+  "homeTeam": "Los Angeles Lakers",
+  "awayTeam": "Boston Celtics",
+  "status": "InProgress",
+  "live": true,
+  "ended": false,
+  "score": "98-94",
+  "period": "Q4",
+  "elapsed": "05:12"
+}

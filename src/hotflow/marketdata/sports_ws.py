@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from typing import Any, Protocol
 
 from hotflow.marketdata.websocket import SPORTS_HEARTBEAT
-from hotflow.official import SPORTS_CLIENT_PONG, SPORTS_SERVER_PING, SPORTS_WS
+from hotflow.official import SPORTS_CLIENT_PONG, SPORTS_SERVER_PING, SPORTS_WS, canonicalize_sports_league
 from hotflow.types import SportsGameState, SportsResolutionSpec
 
 
@@ -39,7 +39,9 @@ def parse_official_sports_message(raw: str | dict[str, Any]) -> SportsGameState 
     game_id = payload.get("gameId", payload.get("game_id"))
     return SportsGameState(
         game_id=int(game_id) if game_id is not None else None,
-        league_abbreviation=payload.get("leagueAbbreviation") or payload.get("league_abbreviation"),
+        league_abbreviation=canonicalize_sports_league(
+            payload.get("leagueAbbreviation") or payload.get("league_abbreviation")
+        ),
         home_team=payload.get("homeTeam") or payload.get("home_team"),
         away_team=payload.get("awayTeam") or payload.get("away_team"),
         status=payload.get("status"),

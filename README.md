@@ -107,14 +107,18 @@ tuner stay scaffolded.
 hotflow paper-run --mock
 hotflow rtds-cache --mock --out data/rtds_twap_cache.json
 hotflow paper-run --twap-cache data/rtds_twap_cache.json --mock
-pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py
+hotflow sports-cache --mock --out data/sports_ws_cache.json
+hotflow paper-run --sports-cache data/sports_ws_cache.json --mock
+pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py tests/test_sports_cache.py
 ```
 
-Optional public RTDS collect (still PAPER — no orders):
+Optional public RTDS / Sports WS collect (still PAPER — no orders):
 
 ```bash
 hotflow rtds-cache --live --duration 12
 hotflow paper-run --rtds-live
+hotflow sports-cache --live --seconds 12
+hotflow paper-run --sports-live
 ```
 
 Window is **never** defaulted. It must appear as an official 30s or 60s lookback
