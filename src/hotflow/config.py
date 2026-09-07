@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class LiveGates(BaseModel):
@@ -160,9 +160,43 @@ class RiskConfig(BaseModel):
 class FeedConfig(BaseModel):
     max_data_age_ms: int = 8_000
     critical: bool = False
-    ping_interval_s: int | None = None
+    ping_interval_s: float | None = None
     # rtds only: optional unauthenticated public RTDS reader (off by default).
     live_public_client: bool = False
+
+
+class RtdsFeedConfig(FeedConfig):
+    """Public RTDS TWAP cache. Subscriber is off unless explicitly enabled."""
+
+    subscriber_enabled: bool = False
+    reconnect_max_backoff_s: float = 30.0
+    persist_cache: bool = False
+    cache_path: str = "data/rtds_twap_cache.json"
+    collect_seconds: float = 12.0
+    # Empty symbols = official "omit filters", then keep only documented symbols.
+    subscribe_symbols: list[str] = Field(default_factory=list)
+    subscribe_windows: list[int] = Field(default_factory=lambda: [30, 60])
+
+    @field_validator("subscribe_windows")
+    @classmethod
+    def _official_windows_only(cls, value: list[int]) -> list[int]:
+        from hotflow.official import RTDS_TWAP_WINDOWS
+
+        illegal = [item for item in value if item not in RTDS_TWAP_WINDOWS]
+        if illegal:
+            raise ValueError(f"subscribe_windows must be official 30/60 only; got {illegal}")
+        return value
+
+    @field_validator("subscribe_symbols")
+    @classmethod
+    def _documented_symbols_only(cls, value: list[str]) -> list[str]:
+        from hotflow.official import RTDS_CHAINLINK_SYMBOLS
+
+        lowered = [item.lower() for item in value]
+        illegal = [item for item in lowered if item not in RTDS_CHAINLINK_SYMBOLS]
+        if illegal:
+            raise ValueError(f"subscribe_symbols must be documented Chainlink symbols; got {illegal}")
+        return lowered
 
 
 class FeedsConfig(BaseModel):
@@ -179,8 +213,8 @@ class FeedsConfig(BaseModel):
     user_ws: FeedConfig = Field(
         default_factory=lambda: FeedConfig(max_data_age_ms=15_000, critical=True, ping_interval_s=10)
     )
-    rtds: FeedConfig = Field(
-        default_factory=lambda: FeedConfig(max_data_age_ms=10_000, ping_interval_s=5)
+    rtds: RtdsFeedConfig = Field(
+        default_factory=lambda: RtdsFeedConfig(max_data_age_ms=10_000, ping_interval_s=5)
     )
     sports_ws: FeedConfig = Field(default_factory=lambda: FeedConfig(max_data_age_ms=15_000))
 

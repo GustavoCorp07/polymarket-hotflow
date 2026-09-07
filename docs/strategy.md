@@ -19,6 +19,9 @@ exists. **NO TRADE is valid.**
   `required_future_price` (= parsed strike / required official TWAP at expiry),
   `probability_of_finish_above` / `below` (paper heuristic). These feed
   `P(outcome|info)` → RAW_EDGE → NET after fetched fees.
+- Paper scan reads `TwapPrintCache` (injected JSON, `--mock` fixtures, or an
+  optional public RTDS subscriber). Stale/missing official prints skip; they
+  are never invented.
 - Maker vs taker: compare `EV_maker` vs `EV_taker`; taker only if half-life is
   short and NET edge remains positive after fetched fees.
 

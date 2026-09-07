@@ -204,6 +204,19 @@ HOTFLOW therefore:
 Optional live public RTDS client: `PublicRtdsTwapClient` (off by default,
 `feeds.rtds.live_public_client: false`). pytest never opens the socket.
 
+**PAPER RTDS cache subscriber** (`PublicRtdsSubscriber` + `TwapPrintCache`):
+
+- Default `feeds.rtds.subscriber_enabled: false` — paper-run/scan do **not**
+  open a socket unless `--rtds-live` or that flag is set
+- Caches latest official prints keyed by `(symbol, window)` with ingest
+  timestamps; stale/missing → `TWAP_OBSERVATION_STALE` /
+  `TWAP_OBSERVATION_MISSING` (no invented print)
+- Subscribe frames use official topics only; undocumented symbols are dropped
+- `hotflow rtds-cache` defaults to `--mock` (official-shape fixtures on disk);
+  `--live` is the optional unauthenticated collect
+- `hotflow paper-run --twap-cache data/rtds_twap_cache.json` injects a cache
+  for a Gamma/paper cycle without a socket
+
 ### Official Python SDK (optional)
 
 Package `polymarket-client` ≥ 0.3.0 —

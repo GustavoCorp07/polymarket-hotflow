@@ -5,10 +5,15 @@
 ```bash
 pip install -e ".[dev]"
 hotflow paper-run --mock    # official-shape RTDS TWAP fixture, PAPER only
+hotflow rtds-cache --mock   # write official-shape cache (no socket)
+hotflow paper-run --twap-cache data/rtds_twap_cache.json --mock
 hotflow scan
-pytest -q tests/test_twap.py
+pytest -q tests/test_twap.py tests/test_rtds_cache.py
 pytest -q
 ```
+
+`feeds.rtds.subscriber_enabled` and `--rtds-live` stay off unless you want a
+brief unauthenticated RTDS collect. They never enable LIVE CLOB orders.
 
 ## Shadow
 

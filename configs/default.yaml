@@ -139,6 +139,13 @@ feeds:
     critical: false
     ping_interval_s: 5           # official RTDS
     live_public_client: false    # optional unauthenticated RTDS; off by default
+    subscriber_enabled: false    # do not open a socket unless explicitly enabled
+    reconnect_max_backoff_s: 30.0
+    persist_cache: false
+    cache_path: data/rtds_twap_cache.json
+    collect_seconds: 12.0
+    subscribe_symbols: []        # empty = official omit-filters, keep documented symbols
+    subscribe_windows: [30, 60]  # official lookbacks only
   sports_ws:
     max_data_age_ms: 15000
     critical: false

@@ -77,7 +77,32 @@ def rtds_twap_filter(symbol: str) -> str:
 
 def rtds_twap_subscribe_payload(*, window_seconds: int, symbol: str | None = None) -> dict:
     """Official RTDS subscribe frame for one Chainlink TWAP window."""
+    if symbol and symbol.lower() not in RTDS_CHAINLINK_SYMBOLS:
+        raise ValueError(f"symbol {symbol!r} is not in the documented Chainlink set")
     subscription: dict = {"topic": rtds_twap_topic(window_seconds), "type": "update"}
     if symbol:
         subscription["filters"] = rtds_twap_filter(symbol)
     return {"action": "subscribe", "subscriptions": [subscription]}
+
+
+def rtds_twap_subscribe_documented(
+    *,
+    windows: list[int] | None = None,
+    symbols: list[str] | None = None,
+) -> dict:
+    """Subscribe to official 30s/60s topics. Omit filters when symbols is empty
+    (official: receive every pair, then filter in-process to documented symbols).
+    """
+    chosen_windows = list(windows) if windows else sorted(RTDS_TWAP_WINDOWS)
+    subscriptions: list[dict] = []
+    if symbols:
+        for symbol in symbols:
+            if symbol.lower() not in RTDS_CHAINLINK_SYMBOLS:
+                raise ValueError(f"symbol {symbol!r} is not in the documented Chainlink set")
+            for window in chosen_windows:
+                sub = rtds_twap_subscribe_payload(window_seconds=window, symbol=symbol.lower())
+                subscriptions.extend(sub["subscriptions"])
+    else:
+        for window in chosen_windows:
+            subscriptions.extend(rtds_twap_subscribe_payload(window_seconds=window)["subscriptions"])
+    return {"action": "subscribe", "subscriptions": subscriptions}

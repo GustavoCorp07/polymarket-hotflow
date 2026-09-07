@@ -99,8 +99,18 @@ Category adapters (weather/sports/esports), WS reconnect/heartbeat, official RTD
 ```bash
 # Deterministic official-shape RTDS fixture (no live socket, no LIVE orders)
 hotflow paper-run --mock
-pytest -q tests/test_twap.py
+hotflow rtds-cache --mock --out data/rtds_twap_cache.json
+hotflow paper-run --twap-cache data/rtds_twap_cache.json --mock
+pytest -q tests/test_twap.py tests/test_rtds_cache.py
+```
+
+Optional public RTDS collect (still PAPER — no orders):
+
+```bash
+hotflow rtds-cache --live --duration 12
+hotflow paper-run --rtds-live
 ```
 
 Window is **never** defaulted. It must appear as an official 30s or 60s lookback
 in the market’s resolution text. See `docs/research-current.md`.
+Subscriber and live socket stay **off** unless explicitly enabled.
