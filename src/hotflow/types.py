@@ -212,6 +212,24 @@ class SportsResolutionSpec(BaseModel):
     source_text: str = ""
 
 
+class EsportsResolutionSpec(BaseModel):
+    """Parsed esports identity from public Gamma text. Incomplete specs must skip."""
+
+    game: str | None = None
+    tournament: str | None = None
+    home_team: str | None = None
+    away_team: str | None = None
+    match_format: str | None = None
+    best_of: int | None = None
+    map_or_game_index: int | None = None
+    sports_market_type: str | None = None
+    source: str | None = None
+    parse_confidence: float = 0.0
+    complete: bool = False
+    skip_reason: str | None = None
+    source_text: str = ""
+
+
 class SportsGameState(BaseModel):
     """Official Sports WS game object fields only (raw or SDK payload)."""
 

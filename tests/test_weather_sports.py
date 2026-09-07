@@ -242,7 +242,7 @@ def test_crypto_twap_path_untouched() -> None:
     assert result["twap"]["current_twap"] == 68000.0
 
 
-def test_esports_remains_stub() -> None:
+def test_esports_unparseable_skips() -> None:
     cfg = load_config(Path("configs/default.yaml"))
     pipe = PaperPipeline(cfg, use_twap_fixtures=True)
     market = demo_market(hot=True)
@@ -250,9 +250,10 @@ def test_esports_remains_stub() -> None:
     market.tags = ["esports"]
     result = pipe.evaluate_market(market)
     assert result["accepted"] is False
-    assert result["reason"] == ReasonCode.UNSUPPORTED_STRUCTURE
+    assert result["reason"] == ReasonCode.ESPORTS_RULES_UNKNOWN
     stub = EsportsStrategy()
-    assert stub.experiment_fields()["status"] == "stub"
+    assert stub.experiment_fields()["status"] == "skip_heavy"
+    assert stub.experiment_fields()["live_model"] == "none"
 
 
 def test_strategy_adapters() -> None:
@@ -283,6 +284,15 @@ def test_cli_paper_run_mock_weather_and_sports(tmp_path) -> None:
     assert results[1]["weather_spec"]["city"]
     assert results[2]["accepted"] is True
     assert results[2]["sports_model"] == "basketball"
+    esports_results = [item for item in results[3:] if item.get("esports_spec")]
+    assert esports_results
+    assert all(item["accepted"] is False for item in esports_results)
+    assert {item["reason"] for item in esports_results} <= {
+        ReasonCode.ESPORTS_STATE_MISSING,
+        ReasonCode.ESPORTS_RULES_UNKNOWN,
+        ReasonCode.UNSUPPORTED_SPORT,
+        ReasonCode.UNSUPPORTED_STRUCTURE,
+    }
 
 
 def test_config_toggles_safe_defaults() -> None:
@@ -291,6 +301,8 @@ def test_config_toggles_safe_defaults() -> None:
     assert cfg.weather.enabled is True
     assert cfg.sports.enabled is True
     assert cfg.sports.live_public_client is False
+    assert cfg.esports.enabled is True
+    assert cfg.esports.live_public_client is False
     assert cfg.feeds.sports_ws.ping_interval_s == 5.0
 
 

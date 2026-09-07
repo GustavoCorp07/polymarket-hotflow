@@ -1,0 +1,18 @@
+{
+  "source": "docs.polymarket.com/market-data/websocket/sports",
+  "informational": true,
+  "note": "Official Sports WS CS2 example payload (finished). Score grammar is not specified beyond this string. Not a live collect.",
+  "game": {
+    "gameId": 1317359,
+    "leagueAbbreviation": "cs2",
+    "slug": "cs2-arcred-the-glecs-2025-07-20",
+    "homeTeam": "ARCRED",
+    "awayTeam": "The glecs",
+    "status": "finished",
+    "score": "000-000|2-0|Bo3",
+    "period": "2/3",
+    "live": false,
+    "ended": true,
+    "finished_timestamp": "2025-07-20T18:30:00.000Z"
+  }
+}

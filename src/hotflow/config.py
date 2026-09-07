@@ -121,6 +121,15 @@ class SportsEngineConfig(BaseModel):
     live_public_client: bool = False
 
 
+class EsportsEngineConfig(BaseModel):
+    """PAPER esports. Live Sports WS unused — official score grammar is too thin."""
+
+    enabled: bool = True
+    min_parse_confidence: float = 0.5
+    prior_blend: float = 0.35
+    live_public_client: bool = False
+
+
 class FairValueConfig(BaseModel):
     latency_haircut: float = 0.0015
     adverse_selection_haircut: float = 0.0020
@@ -280,6 +289,7 @@ class HotflowConfig(BaseModel):
     monitoring: MonitoringConfig = Field(default_factory=MonitoringConfig)
     weather: WeatherEngineConfig = Field(default_factory=WeatherEngineConfig)
     sports: SportsEngineConfig = Field(default_factory=SportsEngineConfig)
+    esports: EsportsEngineConfig = Field(default_factory=EsportsEngineConfig)
 
     @property
     def is_paper(self) -> bool:

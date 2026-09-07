@@ -39,6 +39,9 @@ hotflow paper-run --mock
 hotflow weather-fixtures
 # or: python scripts/fetch_weather_gamma_fixtures.py --out tests/fixtures/weather
 
+# Public Gamma esports-tag text (no live odds; paper path is skip-heavy)
+hotflow esports-fixtures
+
 # Public Gamma + CLOB scan (read-only)
 hotflow scan
 hotflow paper-run --cycles 1
@@ -100,7 +103,8 @@ GitHub Actions runs lint, typecheck, pytest, and a mock paper-run smoke.
 Weather and sports PAPER adapters parse resolution rules before trading.
 Forecasts never replace the official weather source. Sports uses official WS
 field names and **distinct** NBA/Soccer models (Tennis/NFL refuse). Esports
-remains a stub. Official RTDS 30s/60s TWAP paper path is unchanged (fixtures
+parses official Gamma match text and skips unless an official-shape state
+can be scored without inventing map/economy math. Official RTDS 30s/60s TWAP paper path is unchanged (fixtures
 by default; optional unauthenticated live client off). WS reconnect/heartbeat,
 backtester protocol, shadow mode, Prometheus + JSON logs, and the offline
 tuner stay scaffolded.

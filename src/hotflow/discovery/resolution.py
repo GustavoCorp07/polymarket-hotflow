@@ -7,14 +7,17 @@ from datetime import UTC, datetime
 from typing import Any
 
 from hotflow.official import (
+    ESPORTS_DOCUMENTED_TITLES,
     RTDS_CHAINLINK_SYMBOL_ALIASES,
     RTDS_CHAINLINK_SYMBOLS,
     RTDS_TWAP_WINDOWS,
     SPORTS_DOCUMENTED_LEAGUES,
+    canonicalize_esports_title,
     rtds_twap_topic,
 )
 from hotflow.reason_codes import ReasonCode
 from hotflow.types import (
+    EsportsResolutionSpec,
     MarketRecord,
     ResolutionMeta,
     SportsResolutionSpec,
@@ -510,6 +513,137 @@ def parse_sports_resolution(market: MarketRecord) -> SportsResolutionSpec:
         score=str(score) if score else None,
         sports_market_type=str(sports_type) if sports_type else None,
         game_start=str(game_start) if game_start else None,
+        source=source,
+        parse_confidence=confidence,
+        complete=complete,
+        skip_reason=skip,
+        source_text=text[:800],
+    )
+
+
+_ESPORTS_GAME_PREFIX = re.compile(
+    r"\b(dota\s*2|league of legends|counter-strike(?:\s*2)?|valorant|cs2|lol|dota2)\b",
+    re.I,
+)
+_ESPORTS_BO = re.compile(r"\bBO([1357])\b", re.I)
+_ESPORTS_MAP_IDX = re.compile(r"\b(?:map|game)\s+(\d+)\s+winner\b", re.I)
+_ESPORTS_VS = re.compile(
+    r"(.+?)\s+vs\.?\s+(.+?)(?:\s+\(|\s+-\s+|\s*$)",
+    re.I,
+)
+_ESPORTS_IN_TOURNEY = re.compile(r"\bin the\s+([^.\n]{3,80}?)(?:[.,]|$)", re.I)
+_ESPORTS_SOURCE = re.compile(
+    r"The resolution source for this market will be ([^\n]{3,300})",
+    re.I,
+)
+_ESPORTS_DASH_TOURNEY = re.compile(r"\)\s*-\s*(.+)$")
+
+
+def _esports_game(market: MarketRecord, text: str) -> str | None:
+    raw = market.raw_gamma or {}
+    explicit = raw.get("sport") or raw.get("leagueAbbreviation")
+    titled = canonicalize_esports_title(str(explicit) if explicit else None)
+    if titled:
+        return titled
+    for tag in market.tags:
+        titled = canonicalize_esports_title(tag.replace("-", " "))
+        if titled:
+            return titled
+        titled = canonicalize_esports_title(tag)
+        if titled:
+            return titled
+    match = _ESPORTS_GAME_PREFIX.search(text)
+    if match:
+        return canonicalize_esports_title(match.group(1))
+    slug = (market.slug or "").lower()
+    for token in slug.replace("_", "-").split("-"):
+        titled = canonicalize_esports_title(token)
+        if titled:
+            return titled
+    return None
+
+
+def _esports_source(market: MarketRecord, text: str) -> str | None:
+    raw = market.raw_gamma or {}
+    source = market.resolution.source or raw.get("resolutionSource")
+    if source:
+        source = str(source).strip()
+        if source:
+            return source
+    sentence = _ESPORTS_SOURCE.search(text)
+    if sentence:
+        value = sentence.group(1).strip()
+        if value and "consensus of credible" not in value.lower():
+            return value.rstrip(" .")
+    return None
+
+
+def _esports_teams(market: MarketRecord) -> tuple[str | None, str | None]:
+    raw = market.raw_gamma or {}
+    home = raw.get("homeTeam") or raw.get("home_team")
+    away = raw.get("awayTeam") or raw.get("away_team")
+    question = market.question or ""
+    stripped = re.sub(
+        r"^(?:dota\s*2|lol|league of legends|valorant|cs2|counter-strike(?:\s*2)?)\s*:\s*",
+        "",
+        question,
+        flags=re.I,
+    )
+    labeled = re.match(r"^[^:]+:\s*(.+\s+vs\.?\s+.+)$", stripped, flags=re.I)
+    if labeled:
+        stripped = labeled.group(1)
+    vs = _ESPORTS_VS.search(stripped)
+    if vs and not (home and away):
+        home = home or vs.group(1).strip(" :")
+        away = away or vs.group(2).strip()
+    if home and away and home.lower() == away.lower():
+        return None, None
+    return (str(home) if home else None, str(away) if away else None)
+
+
+def parse_esports_resolution(market: MarketRecord) -> EsportsResolutionSpec:
+    """Parse esports identity from public Gamma text. Never invent live state."""
+    text = _joined_resolution_text(market)
+    raw = market.raw_gamma or {}
+    game = _esports_game(market, text)
+    source = _esports_source(market, text)
+    home, away = _esports_teams(market)
+    bo = _ESPORTS_BO.search(text)
+    best_of = int(bo.group(1)) if bo else None
+    match_format = f"BO{best_of}" if best_of else None
+    map_idx = _ESPORTS_MAP_IDX.search(text)
+    sports_type = raw.get("sportsMarketType") or market.resolution.metric
+    tourney = None
+    dash = _ESPORTS_DASH_TOURNEY.search(market.question or "")
+    if dash:
+        tourney = dash.group(1).strip()
+    if tourney is None:
+        in_t = _ESPORTS_IN_TOURNEY.search(text)
+        if in_t:
+            tourney = in_t.group(1).strip()
+
+    fields = [game, source, home, away, match_format or sports_type, tourney]
+    present = sum(1 for item in fields if item)
+    confidence = present / 6.0
+    skip = None
+    complete = bool(
+        game in ESPORTS_DOCUMENTED_TITLES
+        and source
+        and home
+        and away
+        and confidence >= 0.5
+    )
+    if not complete:
+        skip = ReasonCode.ESPORTS_RULES_UNKNOWN
+    return EsportsResolutionSpec(
+        game=game,
+        tournament=tourney,
+        home_team=home,
+        away_team=away,
+        match_format=match_format,
+        best_of=best_of,
+        map_or_game_index=int(map_idx.group(1)) if map_idx else None,
+        sports_market_type=str(sports_type) if sports_type else None,
         source=source,
         parse_confidence=confidence,
         complete=complete,

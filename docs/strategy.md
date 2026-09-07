@@ -62,8 +62,13 @@ frames skip (`SPORTS_STATE_STALE` / `SPORTS_STATE_MISSING`). Toggle:
 
 ## Esports
 
-Stub only (`UNSUPPORTED_STRUCTURE`). No invented live feeds or shared sports
-model.
+Skip-heavy PAPER path. Official Gamma has CS2/LoL/Dota2/Valorant match text
+and `GET /sports` title ids. Sports WS documents Esports statuses and a CS2
+example score string, but **not** map/economy math or a parseable series
+grammar. Per-title adapters refuse other games. Missing rules →
+`ESPORTS_RULES_UNKNOWN`. Missing official-shape state →
+`ESPORTS_STATE_MISSING`. Unparseable live score → `UNSUPPORTED_STRUCTURE`.
+Live Sports WS client stays off. Toggle: `esports.enabled`.
 
 ## Signal contract (Parte 46)
 

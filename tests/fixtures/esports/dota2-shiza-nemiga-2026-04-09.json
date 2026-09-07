@@ -1,0 +1,22 @@
+{
+  "id": "1923406",
+  "conditionId": "0x10eb4719394c87081726a8896712c1092cbf2137b251191c5aca4c9920c36f96",
+  "slug": "dota2-shiza-nemiga-2026-04-09",
+  "question": "Dota 2: Shizageddon vs Nemiga Gaming (BO3) - DreamLeague Eastern Europe Open Qualifier 1 Playoffs",
+  "description": "This market refers to the Dota 2 Final match between Shizageddon and Nemiga Gaming in the DreamLeague Eastern Europe Open Qualifier 1 Playoffs, initially scheduled for April 9 at 9:00AM ET.\n\nThis market will resolve to \"Shizageddon\" if Shizageddon win the match against Nemiga Gaming.\n\nThis market will resolve to \"Nemiga Gaming\" if Nemiga Gaming win the match against Shizageddon.\n\nIf the match is canceled (not played at all), ends in a tie, or is delayed beyond 7 days from the scheduled date without a winner determined, this market will resolve to 50-50. \n\nIf the match begins but is not completed, and one team wins due to the opponent's forfeiture, disqualification, or walkover, this market will resolve to the team who wins. \n\nIf the match ends in a forfeit, disqualification, or walkover (team withdraws before the start and the other wins automatically), this market will resolve to 50-50. \n\nThe resolution source for this market will be official information from https://www.dotabuff.com. However, if https://www.dotabuff.com has not published final results within 2 hours after the event’s conclusion, a consensus of credible reporting may be used instead including video evidence.\n\nIn cases where a team’s listed name includes minor discrepancies from the resolution source, this market will resolve based on the underlying real-world match rather than exact name matching. Recognizable abbreviations, alternate or erroneous spellings, sponsor tags, affiliate or academy designations, regional identifiers, and minor formatting differences will be treated as referring to the same team, provided the intended team can be clearly and uniquely identified within the relevant competition. If a listed team name has no reasonable connection to any participating team, or if it matches or could reasonably refer to another team in the same competition such that the intended team cannot be unambiguously determined, this market will resolve 50-50.",
+  "resolutionSource": "https://www.dotabuff.com",
+  "endDate": "2026-04-09T19:15:00Z",
+  "closed": true,
+  "active": true,
+  "groupItemTitle": "Match Winner",
+  "sportsMarketType": "moneyline",
+  "outcomes": [
+    "Shizageddon",
+    "Nemiga Gaming"
+  ],
+  "tags": [
+    "esports",
+    "dota2"
+  ],
+  "collected_from": "gamma GET /markets/1923406"
+}

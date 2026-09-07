@@ -1,0 +1,122 @@
+{
+  "source": "gamma_public",
+  "tag_slugs": [
+    "esports",
+    "cs2",
+    "lol",
+    "dota-2",
+    "valorant"
+  ],
+  "endpoint": "GET https://gamma-api.polymarket.com/events?tag_slug=esports",
+  "sports_metadata_endpoint": "GET https://gamma-api.polymarket.com/sports",
+  "preferred_market_endpoint": "GET https://gamma-api.polymarket.com/markets/{id}",
+  "collected_at": "2026-09-07T18:40:03.306440+00:00",
+  "note": "Public Gamma esports-tag market text only. No secrets, token ids, or fees. No live odds, maps, or economies. Resolution rules are copied, not invented.",
+  "markets": [
+    {
+      "id": "1923406",
+      "conditionId": "0x10eb4719394c87081726a8896712c1092cbf2137b251191c5aca4c9920c36f96",
+      "slug": "dota2-shiza-nemiga-2026-04-09",
+      "question": "Dota 2: Shizageddon vs Nemiga Gaming (BO3) - DreamLeague Eastern Europe Open Qualifier 1 Playoffs",
+      "description": "This market refers to the Dota 2 Final match between Shizageddon and Nemiga Gaming in the DreamLeague Eastern Europe Open Qualifier 1 Playoffs, initially scheduled for April 9 at 9:00AM ET.\n\nThis market will resolve to \"Shizageddon\" if Shizageddon win the match against Nemiga Gaming.\n\nThis market will resolve to \"Nemiga Gaming\" if Nemiga Gaming win the match against Shizageddon.\n\nIf the match is canceled (not played at all), ends in a tie, or is delayed beyond 7 days from the scheduled date without a winner determined, this market will resolve to 50-50. \n\nIf the match begins but is not completed, and one team wins due to the opponent's forfeiture, disqualification, or walkover, this market will resolve to the team who wins. \n\nIf the match ends in a forfeit, disqualification, or walkover (team withdraws before the start and the other wins automatically), this market will resolve to 50-50. \n\nThe resolution source for this market will be official information from https://www.dotabuff.com. However, if https://www.dotabuff.com has not published final results within 2 hours after the event’s conclusion, a consensus of credible reporting may be used instead including video evidence.\n\nIn cases where a team’s listed name includes minor discrepancies from the resolution source, this market will resolve based on the underlying real-world match rather than exact name matching. Recognizable abbreviations, alternate or erroneous spellings, sponsor tags, affiliate or academy designations, regional identifiers, and minor formatting differences will be treated as referring to the same team, provided the intended team can be clearly and uniquely identified within the relevant competition. If a listed team name has no reasonable connection to any participating team, or if it matches or could reasonably refer to another team in the same competition such that the intended team cannot be unambiguously determined, this market will resolve 50-50.",
+      "resolutionSource": "https://www.dotabuff.com",
+      "endDate": "2026-04-09T19:15:00Z",
+      "closed": true,
+      "active": true,
+      "groupItemTitle": "Match Winner",
+      "sportsMarketType": "moneyline",
+      "outcomes": [
+        "Shizageddon",
+        "Nemiga Gaming"
+      ],
+      "tags": [
+        "esports",
+        "dota2"
+      ],
+      "collected_from": "gamma GET /markets/1923406"
+    },
+    {
+      "id": "2268716",
+      "conditionId": "0x8e3fd307c78495c7557d7daebebf2100956b3c9225b8006dff67f0d15b04dbed",
+      "slug": "lol-t1-drx-2026-05-20",
+      "question": "LoL: T1 vs Kiwoom DRX (BO3) - LCK Rounds 1-2",
+      "description": "This market refers to the LoL match between T1 and Kiwoom DRX in the LCK Rounds 1-2, initially scheduled for May 20 at 4:00AM ET.\n\nThis market will resolve to \"T1\" if T1 win the match against Kiwoom DRX.\n\nThis market will resolve to \"Kiwoom DRX\" if Kiwoom DRX win the match against T1.\n\nIf the match is canceled (not played at all), ends in a tie, or is delayed beyond 7 days from the scheduled date without a winner determined, this market will resolve to 50-50. \n\nIf the match begins but is not completed, and one team wins due to the opponent's forfeiture, disqualification, or walkover, this market will resolve to the team who wins. \n\nIf the match ends in a forfeit, disqualification, or walkover (team withdraws before the start and the other wins automatically), this market will resolve to 50-50. \n\nThe resolution source for this market will be official information from https://gol.gg/esports/home. However, if https://gol.gg/esports/home has not published final results within 2 hours after the event’s conclusion, a consensus of credible reporting may be used instead including video evidence.\n\nIn cases where a team’s listed name includes minor discrepancies from the resolution source, this market will resolve based on the underlying real-world match rather than exact name matching. Recognizable abbreviations, alternate or erroneous spellings, sponsor tags, affiliate or academy designations, regional identifiers, and minor formatting differences will be treated as referring to the same team, provided the intended team can be clearly and uniquely identified within the relevant competition. If a listed team name has no reasonable connection to any participating team, or if it matches or could reasonably refer to another team in the same competition such that the intended team cannot be unambiguously determined, this market will resolve 50-50.",
+      "resolutionSource": "https://gol.gg/esports/home",
+      "endDate": "2026-05-20T14:00:00Z",
+      "closed": true,
+      "active": true,
+      "groupItemTitle": "Match Winner",
+      "sportsMarketType": "moneyline",
+      "outcomes": [
+        "T1",
+        "Kiwoom DRX"
+      ],
+      "tags": [
+        "esports",
+        "lol"
+      ],
+      "collected_from": "gamma GET /markets/2268716"
+    },
+    {
+      "id": "2308640",
+      "conditionId": "0x56fb9e01abfe73b6974201ca45defe391a37f43cb53292d7ae9c4d2aca312fe4",
+      "slug": "val-tec-ag1-2026-05-20",
+      "question": "Valorant: TEC Esports vs All Gamers (BO5) - Esports World Cup China Qualifier Stage 2",
+      "description": "This market refers to the Valorant Lower bracket final match between TEC Esports and All Gamers in the Esports World Cup China Qualifier Stage 2, initially scheduled for May 20 at 5:00AM ET.\n\nThis market will resolve to \"TEC Esports\" if TEC Esports win the match against All Gamers.\n\nThis market will resolve to \"All Gamers\" if All Gamers win the match against TEC Esports.\n\nIf the match is canceled (not played at all), ends in a tie, or is delayed beyond 7 days from the scheduled date without a winner determined, this market will resolve to 50-50. \n\nIf the match begins but is not completed, and one team wins due to the opponent's forfeiture, disqualification, or walkover, this market will resolve to the team who wins. \n\nIf the match ends in a forfeit, disqualification, or walkover (team withdraws before the start and the other wins automatically), this market will resolve to 50-50. \n\nThe resolution source for this market will be official information from https://vlr.gg. However, if https://vlr.gg has not published final results within 2 hours after the event’s conclusion, a consensus of credible reporting may be used instead including video evidence.\n\nIn cases where a team’s listed name includes minor discrepancies from the resolution source, this market will resolve based on the underlying real-world match rather than exact name matching. Recognizable abbreviations, alternate or erroneous spellings, sponsor tags, affiliate or academy designations, regional identifiers, and minor formatting differences will be treated as referring to the same team, provided the intended team can be clearly and uniquely identified within the relevant competition. If a listed team name has no reasonable connection to any participating team, or if it matches or could reasonably refer to another team in the same competition such that the intended team cannot be unambiguously determined, this market will resolve 50-50.",
+      "resolutionSource": "https://vlr.gg",
+      "endDate": "2026-05-20T15:10:00Z",
+      "closed": true,
+      "active": true,
+      "groupItemTitle": "Match Winner",
+      "sportsMarketType": "moneyline",
+      "outcomes": [
+        "TEC Esports",
+        "All Gamers"
+      ],
+      "tags": [
+        "esports",
+        "val"
+      ],
+      "collected_from": "gamma GET /markets/2308640"
+    },
+    {
+      "id": "536506",
+      "conditionId": "0x1cbd54e271e0928fcb3a117b131ed73920dd4482be6c5da31f3c234168dbb177",
+      "slug": "pgl-bucharest-falcons-vs-faze",
+      "question": "PGL Bucharest: Falcons vs. FaZe",
+      "description": "Falcons and FaZe are scheduled to play each other in a semi-final matchup in the 2025 PGL Bucharest Tournament on April 12, 2025, at 7:00 AM ET.\n\nThis market will resolve to “Falcons” if Falcons advance against FaZe in the semi-finals of the PGL Bucharest Tournament.\n\nThis market will resolve to “FaZe” if FaZe advances against Falcons in the semi-finals of the PGL Bucharest Tournament.\n\nIf the match ends in a tie, is canceled, or delayed beyond May 28, 2025, this market will resolve to 50-50.\n\nThe resolution source for this market will be official information from the PGL (https://www.pglesports.com/cs2/pgl-bucharest-2025/).",
+      "endDate": "2025-04-12T12:00:00Z",
+      "closed": true,
+      "active": true,
+      "outcomes": [
+        "Falcons",
+        "FaZe"
+      ],
+      "tags": [
+        "esports",
+        "cs2"
+      ],
+      "collected_from": "gamma GET /markets/536506"
+    },
+    {
+      "id": "693580",
+      "conditionId": "0x12e576af65661a45fba86fc4b40d10adb1fb8b5e2455f2c42593b96b9ae4911a",
+      "slug": "will-kt-rolster-win-the-lck-2026-season-playoffs",
+      "question": "Will KT Rolster win the LCK 2026 season playoffs?",
+      "description": "This market will resolve according to the winner of the League of Legends Champions Korea (LCK) 2026 season playoffs.\n\nIf the 2026 LCK season is postponed after December 31, 2026 11:59 PM ET, canceled, or a winner has not been declared in this timeframe, this market will resolve to “Other”.\n\nIf multiple teams are declared winner, this market will resolve in favor of the team whose listed team name comes first alphabetically.\n\nThe resolution source for this market will be official information from Riot Games (https://lolesports.com/); however, a consensus of credible reporting may also be used.",
+      "endDate": "2026-12-31T00:00:00Z",
+      "closed": true,
+      "active": true,
+      "groupItemTitle": "KT Rolster",
+      "outcomes": [
+        "Yes",
+        "No"
+      ],
+      "tags": [
+        "esports",
+        "lol"
+      ],
+      "collected_from": "gamma GET /markets/693580"
+    }
+  ]
+}

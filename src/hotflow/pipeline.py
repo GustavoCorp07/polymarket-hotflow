@@ -12,6 +12,7 @@ from hotflow.analytics.pnl_velocity import pnl_velocity
 from hotflow.analytics.signal_quality import signal_quality
 from hotflow.config import HotflowConfig
 from hotflow.discovery.resolution import (
+    parse_esports_resolution,
     parse_resolution,
     parse_sports_resolution,
     parse_twap_resolution,
@@ -21,6 +22,7 @@ from hotflow.discovery.scanner import UniverseScanner, infer_category
 from hotflow.execution.live_gate import live_gates_open
 from hotflow.execution.paper import PaperBroker
 from hotflow.fairvalue.crypto import CryptoFairValue
+from hotflow.fairvalue.esports import FixtureEsportsSource, esports_adapter_for
 from hotflow.fairvalue.maker_taker import choose_style
 from hotflow.fairvalue.sports import sports_model_for
 from hotflow.fairvalue.twap import compute_twap_snapshot, time_remaining_seconds, twap_p_info_for_market
@@ -144,6 +146,7 @@ class PaperPipeline:
         weather_source: WeatherForecastSource | None = None,
         sports_source: SportsStateSource | None = None,
         sports_cache_path: str | Path | None = None,
+        esports_source: FixtureEsportsSource | None = None,
     ) -> None:
         self.config = config
         self.kills = KillSwitchBoard()
@@ -168,6 +171,7 @@ class PaperPipeline:
             self.weather_source = src
         else:
             self.weather_source = FixtureWeatherSource()
+        self.esports_source = esports_source if esports_source is not None else FixtureEsportsSource()
         self.sports_source = make_sports_source(
             config,
             use_twap_fixtures=use_twap_fixtures,
@@ -224,14 +228,83 @@ class PaperPipeline:
             self._audit(market_id=market.market_id, accepted=False, reason=ReasonCode.UNKNOWN_RESOLUTION)
             return {"accepted": False, "reason": ReasonCode.UNKNOWN_RESOLUTION}
 
+        extras: dict[str, Any] = {}
         if category == "esports":
-            self._audit(market_id=market.market_id, accepted=False, reason=ReasonCode.UNSUPPORTED_STRUCTURE)
-            return {"accepted": False, "reason": ReasonCode.UNSUPPORTED_STRUCTURE}
+            if not self.config.esports.enabled:
+                self._audit(market_id=market.market_id, accepted=False, reason=ReasonCode.CATEGORY_DISABLED)
+                return {"accepted": False, "reason": ReasonCode.CATEGORY_DISABLED}
+            esports_spec = parse_esports_resolution(market)
+            extras_es: dict[str, Any] = {"esports_spec": esports_spec.model_dump()}
+            if (
+                not esports_spec.complete
+                or esports_spec.parse_confidence < self.config.esports.min_parse_confidence
+            ):
+                reason = esports_spec.skip_reason or ReasonCode.ESPORTS_RULES_UNKNOWN
+                self._audit(market_id=market.market_id, accepted=False, reason=reason, extra=extras_es)
+                return {
+                    "accepted": False,
+                    "reason": reason,
+                    "market_id": market.market_id,
+                    "question": market.question,
+                    "esports_spec": esports_spec.model_dump(),
+                }
+            adapter = esports_adapter_for(esports_spec.game)
+            if adapter is None:
+                self._audit(
+                    market_id=market.market_id,
+                    accepted=False,
+                    reason=ReasonCode.UNSUPPORTED_SPORT,
+                    extra=extras_es,
+                )
+                return {
+                    "accepted": False,
+                    "reason": ReasonCode.UNSUPPORTED_SPORT,
+                    "market_id": market.market_id,
+                    "question": market.question,
+                    "esports_spec": esports_spec.model_dump(),
+                    "game": esports_spec.game,
+                }
+            state = self.esports_source.latest(esports_spec)
+            extras_es["esports_adapter"] = adapter.title
+            if state is None:
+                self._audit(
+                    market_id=market.market_id,
+                    accepted=False,
+                    reason=ReasonCode.ESPORTS_STATE_MISSING,
+                    extra=extras_es,
+                )
+                return {
+                    "accepted": False,
+                    "reason": ReasonCode.ESPORTS_STATE_MISSING,
+                    "market_id": market.market_id,
+                    "question": market.question,
+                    "esports_spec": esports_spec.model_dump(),
+                    "esports_adapter": adapter.title,
+                }
+            extras_es["esports_state"] = state.model_dump(mode="json")
+            extras_es["esports_state_source"] = state.source
+            esports_p = adapter.p_home_win(esports_spec, state)
+            if esports_p is None:
+                self._audit(
+                    market_id=market.market_id,
+                    accepted=False,
+                    reason=ReasonCode.UNSUPPORTED_STRUCTURE,
+                    extra=extras_es,
+                )
+                return {
+                    "accepted": False,
+                    "reason": ReasonCode.UNSUPPORTED_STRUCTURE,
+                    "market_id": market.market_id,
+                    "question": market.question,
+                    **extras_es,
+                }
+            if p_info is None:
+                p_info = esports_p
+            extras.update(extras_es)
 
         twap_spec = parse_twap_resolution(market)
         twap_snap: TwapSnapshot | None = None
         twap_p_info = p_info
-        extras: dict[str, Any] = {}
 
         if category == "weather":
             if not self.config.weather.enabled:
@@ -434,6 +507,8 @@ class PaperPipeline:
             prior_blend = self.config.weather.prior_blend
         elif category == "sports":
             prior_blend = self.config.sports.prior_blend
+        elif category == "esports":
+            prior_blend = self.config.esports.prior_blend
         edge = self.fair.evaluate(
             market,
             side=Side.BUY,
@@ -755,6 +830,51 @@ def gamma_weather_demo_markets(*, hot: bool = True) -> list[MarketRecord]:
     from hotflow.discovery.weather_gamma import load_weather_fixture_bundle
 
     return [weather_market_from_gamma_fixture(row, hot=hot) for row in load_weather_fixture_bundle()]
+
+
+def esports_market_from_gamma_fixture(row: dict[str, Any], *, hot: bool = True) -> MarketRecord:
+    """Build a paper MarketRecord from redacted public Gamma esports text."""
+    market = demo_market(hot=hot)
+    market.market_id = str(row.get("id") or row.get("slug") or "gamma-esports")
+    market.slug = str(row.get("slug") or market.market_id)
+    market.category = "esports"
+    market.tags = list(row.get("tags") or ["esports"])
+    market.question = str(row.get("question") or "")
+    if row.get("outcomes") and isinstance(row["outcomes"], list):
+        market.outcomes = [str(item) for item in row["outcomes"]]
+    raw = {
+        "description": row.get("description"),
+        "resolutionSource": row.get("resolutionSource"),
+        "endDate": row.get("endDate"),
+        "sportsMarketType": row.get("sportsMarketType"),
+        "groupItemTitle": row.get("groupItemTitle"),
+        "id": row.get("id"),
+        "slug": row.get("slug"),
+    }
+    market.raw_gamma = {key: value for key, value in raw.items() if value is not None}
+    market.resolution = parse_resolution(
+        {
+            "resolutionSource": row.get("resolutionSource") or "",
+            "endDate": row.get("endDate"),
+            "sportsMarketType": row.get("sportsMarketType"),
+            "description": row.get("description"),
+        }
+    )
+    if not market.resolution.source:
+        parsed = parse_esports_resolution(market)
+        if parsed.source:
+            market.resolution.source = parsed.source
+            market.resolution.tradeable = True
+            market.resolution.parse_confidence = max(
+                market.resolution.parse_confidence, parsed.parse_confidence
+            )
+    return market
+
+
+def gamma_esports_demo_markets(*, hot: bool = True) -> list[MarketRecord]:
+    from hotflow.discovery.esports_gamma import load_esports_fixture_bundle
+
+    return [esports_market_from_gamma_fixture(row, hot=hot) for row in load_esports_fixture_bundle()]
 
 
 def demo_sports_nba_market(*, hot: bool = True) -> MarketRecord:

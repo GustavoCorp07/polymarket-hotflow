@@ -269,6 +269,46 @@ arrive lowercase (`mlb`) and are case-folded only. A redacted official-field
 sample is in `tests/fixtures/sports_ws_live_sample.json`. Extra wire keys
 such as `eventState` are ignored. Data remains informational.
 
+### Esports (official Gamma text exists; live model does not)
+
+Retrieved **2026-09-07**.
+
+**What exists (official):**
+
+| Surface | Finding |
+| --- | --- |
+| Gamma `GET /sports` | Title ids `cs2`, `lol`, `dota2`, `val` (plus `lol-wild-rift`). Resolution URLs: hltv.org, liquipedia LoL/Dota2/Valorant. Copied, not scraped. |
+| Gamma `GET /sports/market-types` | Includes `esports_match_result`, `moneyline`, `child_moneyline`, plus CS2/LoL/Dota2-named types. No published settlement math. |
+| Gamma `GET /events?tag_slug=` | `esports`, `cs2`, `lol`, `league-of-legends`, `dota-2`, `valorant` all return real events. |
+| Sports WS status table | Esports row: `not_started`, `running`, `finished`, `postponed`, `canceled` ([realtime-data](https://docs.polymarket.com/market-data/realtime-data)). Do not reuse NBA statuses. |
+| Sports WS CS2 example | [websocket/sports](https://docs.polymarket.com/market-data/websocket/sports) publishes a finished CS2 object: `leagueAbbreviation: "cs2"`, `score: "000-000\|2-0\|Bo3"`, `period: "2/3"`. Grammar of that score string is **not** specified. |
+
+**What does not exist (do not invent):**
+
+- AsyncAPI sports channel (`asyncapi-sports.json`) lists NFL, soccer, NBA, MLB, NHL, cricket — **not** esports titles. Score examples are soccer-style `2-1`.
+- No official map/economy/round-differential stream.
+- No documented mapping from `000-000\|2-0\|Bo3` to series/map wins.
+- Sports WS live collect in this repo still drops `cs2`/`lol`/`dota2`/`val` because the **documented league set** used by the sports cache is `NFL`…`Esports`…`Tennis`, not Gamma `/sports` title ids. We do not invent that mapping on the live reader.
+
+`hotflow esports-fixtures` stores public Gamma text only (`tests/fixtures/esports/`). Preferred ids captured 2026-09-07:
+
+| id | Market | Official source in Gamma |
+| --- | --- | --- |
+| `1923406` | Dota 2 Shizageddon vs Nemiga (BO3) moneyline | `https://www.dotabuff.com` |
+| `2268716` | LoL T1 vs Kiwoom DRX (BO3) | `https://gol.gg/esports/home` |
+| `2308640` | Valorant TEC vs All Gamers (BO5) | `https://vlr.gg` |
+| `536506` | CS2 PGL Bucharest Falcons vs FaZe | empty field; description names PGL |
+| `693580` | LCK 2026 season playoffs (KT) | futures / one team → `ESPORTS_RULES_UNKNOWN` |
+
+HOTFLOW paper esports path is **skip-heavy**:
+
+- parse game / teams / BO / source from Gamma text
+- per-title adapters (`cs2` ≠ `lol` ≠ `dota2` ≠ `val`); other titles → `UNSUPPORTED_SPORT`
+- missing official-shape state → `ESPORTS_STATE_MISSING`
+- injected CS2 docs-example score is stored but **not** parsed → `UNSUPPORTED_STRUCTURE`
+- the only numeric `p_home_win` is ended + documented simple `N-M` pair (AsyncAPI score form). Live Sports WS client stays **off** (`esports.live_public_client: false`)
+- pytest uses committed Gamma fixtures + injected official-shape rows — no unofficial scrapers
+
 ### Weather (no official Polymarket observation API)
 
 Official Polymarket docs do **not** publish a weather observation WebSocket or

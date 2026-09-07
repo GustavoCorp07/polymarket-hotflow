@@ -18,6 +18,7 @@ DATA_API_BASE = "https://data-api.polymarket.com"
 # REST
 GAMMA_MARKETS = "/markets"
 GAMMA_EVENTS = "/events"
+GAMMA_SPORTS = "/sports"
 CLOB_BOOK = "/book"
 CLOB_TICK_SIZE = "/tick-size"
 CLOB_FEE_RATE = "/fee-rate"
@@ -44,6 +45,49 @@ SPORTS_DOCUMENTED_LEAGUES = frozenset(
     {"NFL", "NHL", "MLB", "NBA", "CBB", "CFB", "Soccer", "Esports", "Tennis"}
 )
 _SPORTS_LEAGUE_CASEFOLD = {item.lower(): item for item in SPORTS_DOCUMENTED_LEAGUES}
+
+
+# Official Gamma GET /sports sport identifiers for esports titles (retrieved 2026-09-07).
+# Do not invent extra titles. lol-wild-rift is listed on /sports but has no paper adapter.
+ESPORTS_DOCUMENTED_TITLES = frozenset({"cs2", "lol", "dota2", "val"})
+ESPORTS_TITLE_ALIASES = {
+    "cs2": "cs2",
+    "counter-strike 2": "cs2",
+    "counter-strike": "cs2",
+    "lol": "lol",
+    "league of legends": "lol",
+    "dota2": "dota2",
+    "dota 2": "dota2",
+    "val": "val",
+    "valorant": "val",
+}
+# resolution URLs copied from official GET /sports rows — not live scrapers.
+ESPORTS_SPORTS_METADATA_RESOLUTION = {
+    "cs2": "https://hltv.org",
+    "lol": "https://liquipedia.net/leagueoflegends/Main_Page",
+    "dota2": "https://www.liquipedia.net/dota2/Main_Page",
+    "val": "https://liquipedia.net/valorant/Main_Page",
+}
+# Official Sports WS status table row for Esports (docs.polymarket.com realtime-data).
+ESPORTS_DOCUMENTED_STATUSES = frozenset(
+    {"not_started", "running", "finished", "postponed", "canceled"}
+)
+
+
+def canonicalize_esports_title(raw: str | None) -> str | None:
+    """Map a Gamma /sports id or alias onto a documented esports title.
+
+    Case-fold and documented aliases only. Do not invent titles.
+    """
+    if not raw:
+        return None
+    text = raw.strip()
+    if text in ESPORTS_DOCUMENTED_TITLES:
+        return text
+    mapped = ESPORTS_TITLE_ALIASES.get(text.lower())
+    if mapped in ESPORTS_DOCUMENTED_TITLES:
+        return mapped
+    return None
 
 
 def canonicalize_sports_league(raw: str | None) -> str | None:

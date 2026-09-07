@@ -118,6 +118,9 @@ PnL velocity, regime labels, Parte 46 signal-quality JSON.
   default-off. `SportsGameCache` keys official-shape updates by `gameId`.
   Fresh cache → score; missing/stale → skip. `NBABasketballModel` ≠
   `SoccerModel`. Unsupported sports refuse.
+- Esports: parse Gamma match text (game/teams/BO/source). Per-title stubs
+  (`cs2`/`lol`/`dota2`/`val`) refuse other titles. No invented live feed.
+  Toggle: `esports.enabled` (live client off).
 - Wired into discovery → HMS → fair value → risk → paper. Crypto TWAP path
   unchanged. Toggles: `weather.enabled`, `sports.enabled` (live sports
   client off).
@@ -126,7 +129,7 @@ PnL velocity, regime labels, Parte 46 signal-quality JSON.
 
 - Market / user / RTDS reconnect + heartbeat  
 - TWAP-aware crypto paper FV + public RTDS print cache (official 30s/60s only)  
-- Esports strategy stub (no live model)  
+- Esports skip-heavy parser + Gamma fixtures (no invented live model)  
 - Event-driven backtester protocol  
 - `trading.shadow: true` (score + audit, no orders)  
 - Prometheus metrics + JSON logs  

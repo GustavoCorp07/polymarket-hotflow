@@ -179,6 +179,14 @@ sports:
   prior_blend: 0.35
   live_public_client: false
 
+# PAPER-only esports. Official Gamma text + skip-heavy per-title stubs.
+# Sports WS live client stays off — no documented esports score/economy model.
+esports:
+  enabled: true
+  min_parse_confidence: 0.5
+  prior_blend: 0.35
+  live_public_client: false
+
 storage:
   sqlite_path: data/hotflow.sqlite
   parquet_dir: data/parquet
