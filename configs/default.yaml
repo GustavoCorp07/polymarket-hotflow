@@ -201,6 +201,17 @@ backtest:
     test_seconds: 300
     step_seconds: 300
 
+# Optional public CLOB/RTDS collect. Live is off unless `hotflow record-stream --live`.
+recorder:
+  default_seconds: 20
+  max_seconds: 180
+  poll_interval_s: 2
+  max_events: 400
+
+# Offline suggestions only. auto_apply cannot write configs/default.yaml.
+tuner:
+  auto_apply: false
+
 storage:
   sqlite_path: data/hotflow.sqlite
   parquet_dir: data/parquet

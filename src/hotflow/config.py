@@ -155,6 +155,21 @@ class BacktestEngineConfig(BaseModel):
     walk_forward: WalkForwardConfig = Field(default_factory=WalkForwardConfig)
 
 
+class RecorderConfig(BaseModel):
+    """Optional public CLOB/RTDS collect. Default-off live; pytest never opens sockets."""
+
+    default_seconds: float = 20.0
+    max_seconds: float = 180.0
+    poll_interval_s: float = 2.0
+    max_events: int = 400
+
+
+class TunerConfig(BaseModel):
+    """Offline suggestions only. auto_apply cannot write production configs."""
+
+    auto_apply: bool = False
+
+
 class FairValueConfig(BaseModel):
     latency_haircut: float = 0.0015
     adverse_selection_haircut: float = 0.0020
@@ -316,6 +331,8 @@ class HotflowConfig(BaseModel):
     sports: SportsEngineConfig = Field(default_factory=SportsEngineConfig)
     esports: EsportsEngineConfig = Field(default_factory=EsportsEngineConfig)
     backtest: BacktestEngineConfig = Field(default_factory=BacktestEngineConfig)
+    recorder: RecorderConfig = Field(default_factory=RecorderConfig)
+    tuner: TunerConfig = Field(default_factory=TunerConfig)
 
     @property
     def is_paper(self) -> bool:

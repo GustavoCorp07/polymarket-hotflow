@@ -127,6 +127,8 @@ PnL velocity, regime labels, Parte 46 signal-quality JSON.
 - Backtest: `hotflow backtest --fixture` replays time-ordered book/trade/state
   events through the same FV/risk path. No look-ahead. SHADOW logs
   `would_buy` / `would_sell` and never transmits.
+- Recorder: `hotflow record-stream --mock` (default) or optional `--live`
+  public CLOB book poll + optional RTDS. Tuner: suggestion JSON/YAML only.
 
 ## Scaffolded (interfaces tested; adapters incomplete)
 
@@ -134,5 +136,5 @@ PnL velocity, regime labels, Parte 46 signal-quality JSON.
 - TWAP-aware crypto paper FV + public RTDS print cache (official 30s/60s only)  
 - Esports skip-heavy parser + Gamma fixtures (no invented live model)  
 - Prometheus metrics + JSON logs  
-- Offline auto-tuner stub  
+- Offline tuner suggestions (`hotflow tune`; never auto-applies)  
 - Strategy experiment tracking fields

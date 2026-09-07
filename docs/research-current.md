@@ -391,6 +391,23 @@ URLs, live fees, or TWAP values.
 `hotflow backtest --fixture PATH` writes `reports/backtest-*.json`.
 `hotflow shadow --mock` logs `would_buy` / `would_sell` and never sends orders.
 
+### Official-shape stream recorder + offline tuner
+
+Retrieved **2026-09-07**.
+
+| Item | Official / policy |
+| --- | --- |
+| CLOB book | `GET https://clob.polymarket.com/book?token_id=` (public). Recorder polls this only. |
+| CLOB fee-rate | `GET /fee-rate` → `base_fee` bp stored as `clob_base_fee_bp`. Curve `rate` copied from `clob-markets` `fd.r` when present — **not** `bp/10000`. |
+| RTDS TWAP | Optional `--rtds` uses existing public RTDS 30s/60s client. Default off. |
+| Defaults | `hotflow record-stream --mock` writes a **SYNTHETIC** multi-minute official-shape fixture. `--live` is optional. |
+| Tuner | `hotflow tune --report` suggests bounded threshold/weight changes. `applied: false`. Refuses abs-PnL. `--write-suggestion` only under `reports/`. Never writes `configs/`. |
+
+A short redacted live CLOB collect from this environment is in
+`tests/fixtures/backtest/clob_book_live_sample.json` (token ids stripped).
+The longer pytest stream `crypto_longer_synthetic.json` is labeled
+`origin=synthetic_official_shape` — not a live archive.
+
 ---
 
 ## 3. What we deliberately do **not** invent

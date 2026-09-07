@@ -353,6 +353,96 @@ def shadow(
     typer.echo(f"shadow decisions={len(rows)} sent_orders=0 report={target}")
 
 
+@app.command("record-stream")
+def record_stream(
+    mock: bool = typer.Option(True, "--mock/--live", help="Mock writes the synthetic longer fixture"),
+    seconds: float | None = typer.Option(None, "--seconds", help="Live collect seconds (capped)"),
+    rtds: bool = typer.Option(False, "--rtds", help="Also collect public RTDS 30s/60s prints"),
+    symbol: str = typer.Option("btc/usd", "--symbol", help="Documented Chainlink symbol"),
+    token_id: str | None = typer.Option(None, "--token-id", help="Public CLOB token id (live only)"),
+    out: Path | None = typer.Option(None, "--out"),
+    config: Path | None = typer.Option(None, "--config", "-c"),
+) -> None:
+    """Record official-shape CLOB book (+ optional RTDS) for backtest. No orders."""
+    from hotflow.backtest.recorder import (
+        DEFAULT_FIXTURE_DIR,
+        DEFAULT_SECONDS,
+        LONGER_SYNTHETIC_NAME,
+        MAX_SECONDS,
+        build_synthetic_longer_stream,
+        record_live_stream,
+        write_stream,
+    )
+
+    cfg = load_config(config)
+    if cfg.trading.mode.lower() == "live":
+        raise typer.BadParameter("record-stream refuses LIVE trading mode")
+    if mock:
+        document = build_synthetic_longer_stream()
+        target = out or (DEFAULT_FIXTURE_DIR / LONGER_SYNTHETIC_NAME)
+        write_stream(target, document)
+        typer.echo(
+            f"record-stream origin=synthetic_official_shape events={document.get('event_count')} "
+            f"path={target}"
+        )
+        return
+    duration = min(seconds or cfg.recorder.default_seconds or DEFAULT_SECONDS, MAX_SECONDS)
+    document = asyncio.run(
+        record_live_stream(
+            seconds=duration,
+            poll_interval_s=cfg.recorder.poll_interval_s,
+            token_id=token_id,
+            include_rtds=rtds,
+            symbol=symbol,
+        )
+    )
+    target = out or Path(cfg.storage.reports_dir) / (
+        f"record-stream-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}.json"
+    )
+    write_stream(target, document)
+    typer.echo(
+        f"record-stream origin=live_public_clob events={document.get('event_count')} "
+        f"rtds={rtds} path={target}"
+    )
+
+
+@app.command()
+def tune(
+    report: list[Path] = typer.Option(..., "--report", help="Backtest report JSON (repeatable)"),
+    objective: str = typer.Option("expectancy", "--objective"),
+    hypothesis: str = typer.Option("", "--hypothesis"),
+    write_suggestion: Path | None = typer.Option(
+        None, "--write-suggestion", help="Non-live path under reports/ only"
+    ),
+    out: Path | None = typer.Option(None, "--out"),
+    config: Path | None = typer.Option(None, "--config", "-c"),
+) -> None:
+    """Offline tuner: bounded suggestions from backtest reports. Never auto-applies."""
+    import json
+
+    from hotflow.analytics.tuner import OfflineTuner
+    from hotflow.analytics.tuner import write_suggestion as dump_suggestion
+
+    cfg = load_config(config)
+    if cfg.trading.mode.lower() == "live" or cfg.tuner.auto_apply:
+        raise typer.BadParameter("tune refuses LIVE mode and auto_apply")
+    rows = [json.loads(path.read_text(encoding="utf-8")) for path in report]
+    payload = OfflineTuner().propose_from_reports(
+        rows, objective=objective, hypothesis=hypothesis
+    )
+    target = out or Path(cfg.storage.reports_dir) / (
+        f"tune-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}.json"
+    )
+    write_report(target, payload.as_dict())
+    if write_suggestion is not None:
+        dump_suggestion(write_suggestion, payload)
+        typer.echo(f"tune suggestion={write_suggestion} applied=false")
+    typer.echo(
+        f"tune refused={payload.refused} suggested={len(payload.suggested)} "
+        f"applied=false report={target}"
+    )
+
+
 @app.command()
 def version() -> None:
     from hotflow import __version__

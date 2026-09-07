@@ -116,11 +116,13 @@ class PublicRtdsSubscriber:
         config: RtdsFeedConfig | None = None,
         transport: FrameTransport | None = None,
         send: Callable[[str], Awaitable[None]] | None = None,
+        on_observation: Callable[[OfficialTwapObservation], None] | None = None,
     ) -> None:
         self.cache = cache
         self.config = config or RtdsFeedConfig(max_data_age_ms=10_000, ping_interval_s=RTDS_PING_S)
         self.transport = transport
         self.client = PublicRtdsTwapClient(send=send)
+        self.on_observation = on_observation
         self.ws = ReconnectingWebSocket(
             RTDS_HEARTBEAT,
             send=send or (transport.send if transport is not None else None),
@@ -156,6 +158,8 @@ class PublicRtdsSubscriber:
         if self.cache.put(parsed):
             self.prints_accepted += 1
             self.client._latest[(parsed.symbol, parsed.window_seconds)] = parsed  # noqa: SLF001
+            if self.on_observation is not None:
+                self.on_observation(parsed)
             return parsed
         return None
 

@@ -13,8 +13,11 @@ hotflow sports-cache --mock # write official-shape Sports WS cache (no socket)
 hotflow paper-run --sports-cache data/sports_ws_cache.json --mock
 hotflow scan
 hotflow backtest --fixture tests/fixtures/backtest/crypto_book_trade.json
+hotflow backtest --fixture tests/fixtures/backtest/crypto_longer_synthetic.json
+hotflow record-stream --mock
+hotflow tune --report reports/backtest-*.json --write-suggestion reports/tune-suggestion.yaml
 hotflow shadow --mock
-pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py tests/test_weather_gamma_fixtures.py tests/test_esports.py tests/test_sports_cache.py tests/test_backtest.py
+pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py tests/test_weather_gamma_fixtures.py tests/test_esports.py tests/test_sports_cache.py tests/test_backtest.py tests/test_recorder.py tests/test_tuner.py
 pytest -q
 ```
 
@@ -47,6 +50,33 @@ Candle-only streams are refused. Fees must be a **dated** official-shape
 schedule. Reports include expectancy, drawdown, fees, slippage, trade count,
 reason-code skips, train/validation/OOS, and a walk-forward window stub.
 Absolute PnL is recorded but is **not** a selection metric.
+
+## Record official-shape streams
+
+```bash
+hotflow record-stream --mock
+# optional public collect (PAPER data only, capped duration, default off)
+hotflow record-stream --live --seconds 20 --out reports/record-stream.json
+hotflow record-stream --live --seconds 12 --rtds --symbol btc/usd
+# or: python scripts/record_official_stream.py
+```
+
+`--mock` writes the labeled synthetic longer fixture. `--live` polls official
+`GET /book` (and optional RTDS 30s/60s). Token ids are redacted. If live
+collect fails, keep using the synthetic fixture.
+
+## Offline tuner
+
+```bash
+hotflow backtest --fixture tests/fixtures/backtest/crypto_longer_synthetic.json \
+  --out reports/backtest-longer.json
+hotflow tune --report reports/backtest-longer.json --objective expectancy \
+  --hypothesis "bounded edge vs drawdown" \
+  --write-suggestion reports/tune-suggestion.yaml
+```
+
+Suggestions are **not** applied. `--write-suggestion` must be under `reports/`.
+`--objective pnl` / `abs_pnl` is refused. `tuner.auto_apply` stays false.
 
 ## Shadow
 

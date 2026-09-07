@@ -48,6 +48,9 @@ hotflow paper-run --cycles 1
 
 # Event-driven BACKTEST on a recorded fixture (offline, no LIVE orders)
 hotflow backtest --fixture tests/fixtures/backtest/crypto_book_trade.json
+hotflow backtest --fixture tests/fixtures/backtest/crypto_longer_synthetic.json
+hotflow record-stream --mock
+hotflow tune --report reports/backtest-*.json --write-suggestion reports/tune-suggestion.yaml
 hotflow shadow --mock
 ```
 

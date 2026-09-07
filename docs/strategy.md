@@ -79,6 +79,10 @@ come from the dated fixture schedule via the official taker formula.
 Train / validation / OOS splits plus a walk-forward stub are reported.
 Do not pick a strategy by max absolute backtest PnL.
 
+`hotflow tune` may suggest bounded threshold/weight changes from expectancy,
+drawdown, and skip codes. It never writes `configs/default.yaml` and never
+uses abs PnL as an objective.
+
 SHADOW scores the same path and records `would_buy` / `would_sell` without
 sending orders.
 
