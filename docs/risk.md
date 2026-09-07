@@ -20,6 +20,30 @@ drawdown exceeded, manual halt.
 On trip: block new orders → cancel when safe → keep logs → require explicit
 `KillSwitchBoard.reset(acknowledge=...)`.
 
+## Portfolio vs risk (Parte 24)
+
+The portfolio layer may skip or downsize (`CORRELATED_EXPOSURE`,
+`PORTFOLIO_CONCENTRATION`, `PORTFOLIO_DOWNSIZED`) using explicit correlation
+groups plus the same hard caps:
+
+- `max_concurrent_markets` (open-position / concurrent-market cap)
+- `max_category_exposure`
+- `max_total_exposure`
+- `max_correlated_exposure` (backstop on the summed correlated bucket)
+- `max_order_notional`
+
+Those proposals do **not** override VETO. After allocation, `RiskEngine.decide`
+still runs. A score of 100 still cannot force a blocked order.
+
+Correlation is rule-based only (same underlying, same category+window, tag
+overlap, YAML groups). No estimated residual. See `docs/strategy.md`.
+
+`hotflow paper-soak --mixed` audits those skips/downsizes and group-scoped
+regime scales on a deterministic 5m/15m + news book. It does not open LIVE
+gates and cannot bypass VETO. `hotflow walk-forward` / `decay` on that JSON
+group by **detected** labels; a 5-cycle fixture is flagged `too_small` /
+`insufficient_sample`, not promoted as edge.
+
 ## Capital order (Parte 54)
 
 1. Survive  

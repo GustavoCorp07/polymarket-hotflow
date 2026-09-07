@@ -213,6 +213,94 @@ recorder:
 tuner:
   auto_apply: false
 
+# Parte 24 — propose sizes/selection only. Risk VETO stays absolute.
+# Correlations are explicit rules + YAML groups. Never estimated from prints.
+portfolio:
+  enabled: true
+  rank:
+    opportunity: 1.0
+    pnl_velocity: 1.0
+    net_edge: 0.5
+    liquidity: 0.25
+  min_allocate_fraction: 0.25   # remaining room below this fraction → SKIP, not a dust clip
+  tag_overlap_min: 2
+  generic_tags: [crypto, weather, sports, esports, other]
+  rules:
+    same_underlying: true
+    same_category_window: true
+    tag_overlap: true
+    yaml_groups: true
+  groups:
+    - id: crypto_short_window
+      assumption: >
+        Short-window crypto Up/Down (5m/15m and official 30s/60s TWAP) can be
+        the same macro bet across BTC/ETH/SOL. Not a measured rho.
+      category: crypto
+      windows: ["5m", "15m", "30s", "60s"]
+      max_markets: 1
+    - id: weather_city
+      assumption: Same-city weather contracts share the official observation.
+      category: weather
+      key: city
+      max_markets: 1
+    - id: sports_game
+      assumption: Contracts on the same parsed game share the sports outcome.
+      category: sports
+      key: game
+      max_markets: 1
+    - id: esports_match
+      assumption: Contracts on the same parsed match share the esports outcome.
+      category: esports
+      key: match
+      max_markets: 1
+  regimes:
+    - id: news_shock
+      assumption: "Detected or fixture news-shock: tighten short-window crypto cap."
+      group_scales:
+        crypto_short_window: 0.5
+    - id: liquidity_vacuum
+      assumption: "Detected liquidity vacuum: tighten short-window crypto cap."
+      group_scales:
+        crypto_short_window: 0.5
+    - id: near_resolution
+      assumption: "Near-resolution weather: tighten same-city weather cap."
+      group_scales:
+        weather_city: 0.5
+
+# Parte 25 — first-class detectors. Missing features → N/A, never invented.
+# Regime may scale allocator groups or disable a category; it never bypasses risk.
+regimes:
+  enabled: true
+  crypto:
+    near_resolution_s: 900
+    high_vol_spread: 0.08
+    low_vol_spread: 0.015
+    liquidity_vacuum: 200
+    vacuum_spread: 0.06
+    news_shock_min_relevance: 0.4
+    news_shock_classes: [official, wire, breaking]
+    trend_imbalance: 0.35
+    mean_reversion_imbalance: 0.10
+    mean_reversion_dev: 0.02
+  weather:
+    near_resolution_s: 3600
+    observation_phase_s: 21600
+    uncertain_std_frac: 0.15
+    converging_std_frac: 0.05
+  strategies:
+    crypto:
+      enabled_regimes: []
+      disabled_regimes: []
+    weather:
+      enabled_regimes: []
+      disabled_regimes: []
+    sports:
+      enabled_regimes: []
+      disabled_regimes: []
+    esports:
+      enabled_regimes: []
+      disabled_regimes: []
+
 # PAPER news overlay. Labeled fixtures / injected items only.
 # Never BUY/SELL from news. Public fetch stays off (no scrape in this pass).
 news:

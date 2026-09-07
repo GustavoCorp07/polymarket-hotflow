@@ -36,6 +36,8 @@ def build_review(
             "scheme": walk.get("scheme"),
             "folds": walk.get("folds"),
             "regime_split": walk.get("regime_split"),
+            "fold_note": walk.get("fold_note"),
+            "analysis_unit": walk.get("analysis_unit"),
             "auto_disable": False,
         },
         "selection": {
@@ -46,6 +48,16 @@ def build_review(
         "auto_disable": False,
         "suggestion_only": True,
     }
+    if walk.get("mixed_soak"):
+        payload["mixed_soak"] = True
+        payload["detected_regimes"] = {
+            "analysis_unit": walk.get("analysis_unit"),
+            "detected_regime_split": walk.get("detected_regime_split") or walk.get("regime_split"),
+            "allocator_outcomes": walk.get("allocator_outcomes"),
+            "close_pnl_by_detected_label": walk.get("close_pnl_by_detected_label"),
+            "decay_by_detected_label": walk.get("decay_by_detected_label"),
+        }
+        payload["decay_by_detected_label"] = walk.get("decay_by_detected_label")
     if blocked:
         payload["refused"] = True
         payload["reason"] = blocked.get("reason")
@@ -118,4 +130,10 @@ def format_review(report: dict[str, Any]) -> str:
         )
     half = perf.get("half_life") or {}
     lines.append(f"  half_life_bucket={half.get('bucket')}")
+    detected = (report.get("detected_regimes") or {}).get("detected_regime_split") or {}
+    if detected.get("status") == "detected":
+        lines.append(
+            f"  detected_regimes n_proposals={detected.get('n_proposals')} "
+            f"labels={list((detected.get('regimes') or {}).keys())} strong_conclusion=false"
+        )
     return "\n".join(lines)

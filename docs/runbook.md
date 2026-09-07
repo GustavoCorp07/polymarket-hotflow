@@ -26,10 +26,11 @@ hotflow news-fixtures
 hotflow paper-run --mock --news-fixtures
 hotflow shadow --mock --news-fixtures
 hotflow paper-soak --long --target-closes 50
+hotflow paper-soak --mixed --cycles 5
 hotflow performance --report reports/paper-soak-long-*.json
 hotflow decay --report reports/paper-soak-long-*.json
 hotflow walk-forward --report reports/paper-soak-long-*.json
-pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py tests/test_weather_gamma_fixtures.py tests/test_esports.py tests/test_sports_cache.py tests/test_backtest.py tests/test_recorder.py tests/test_tuner.py tests/test_observability.py tests/test_paper_ledger.py tests/test_paper_gates.py tests/test_shadow_gates.py tests/test_failure_injection.py tests/test_live_gates.py tests/test_security_hygiene.py tests/test_readiness.py tests/test_news_engine.py tests/test_performance.py tests/test_paper_long_soak.py tests/test_walkforward.py
+pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py tests/test_weather_gamma_fixtures.py tests/test_esports.py tests/test_sports_cache.py tests/test_backtest.py tests/test_recorder.py tests/test_tuner.py tests/test_observability.py tests/test_paper_ledger.py tests/test_paper_gates.py tests/test_shadow_gates.py tests/test_failure_injection.py tests/test_live_gates.py tests/test_security_hygiene.py tests/test_readiness.py tests/test_news_engine.py tests/test_performance.py tests/test_paper_long_soak.py tests/test_mixed_paper_soak.py tests/test_mixed_walkforward.py tests/test_walkforward.py
 pytest -q
 ```
 
@@ -181,6 +182,9 @@ It never places an order. `--fetch-public` stays off and does not scrape.
 
 ```bash
 hotflow paper-soak --long --target-closes 50   # labeled synthetic official-shape lots
+hotflow paper-soak --mixed --cycles 5         # allocator/regime audit (not the n≥50 sample)
+hotflow walk-forward --report reports/paper-soak-mixed-*.json
+hotflow decay --report reports/paper-soak-mixed-*.json
 hotflow performance --report reports/paper-soak-long-*.json
 hotflow decay --report reports/paper-soak-long-*.json
 hotflow walk-forward --report reports/paper-soak-long-*.json
@@ -212,6 +216,12 @@ otherwise `N/A`. Kimi `PERFORMANCE_ANALYST` is cold-path only.
 hotflow paper-soak --long --target-closes 50
 hotflow walk-forward --report reports/paper-soak-long-*.json
 # expanding train 20 → holdout 10, step 10 (default). --rolling for a sliding train.
+
+# Mixed soak: detected detector labels (not --long synthetic notes)
+hotflow paper-soak --mixed --cycles 5 --out reports/paper-soak-mixed.json
+hotflow walk-forward --report reports/paper-soak-mixed.json
+hotflow decay --report reports/paper-soak-mixed.json
+hotflow performance --report reports/paper-soak-mixed.json
 ```
 
 Uses **only** the closed trades already in the report. Each fold reports
@@ -222,6 +232,13 @@ Holdouts of 10 are caveated (`small_sample_no_strong_conclusion`).
 Long-soak lots carry a **labeled synthetic** regime (`normal` first half,
 `high_volatility` second half) — not a live-vol classifier. Reports without
 regime notes get `regime_split.status=N/A`.
+
+`paper-soak --mixed` JSON is a different unit: walk-forward/decay group by
+**detected** `extras.regime` on evaluate proposals (`news_shock`,
+`near_resolution`, …). Close PnL is joined by market_id + flatten recipe when
+present. Default 20/10 folds are **not invented** when n_closes is ~8–15
+(`fold_note`). Per-label decay windows 50/100/500 stay `insufficient_sample`.
+This is PAPER fixture analysis, not live edge.
 
 ## Readiness rollup
 
@@ -266,6 +283,10 @@ hotflow paper-soak --cycles 5 --serve-metrics
 # Longer labeled soak for performance/decay (n≥50 closes, MARK between open/close)
 hotflow paper-soak --long --target-closes 50
 # writes reports/paper-soak-long-*.json (session + ledger events)
+
+# Mixed fixture soak: allocator + regime overlays (5m AND 15m + news). PAPER only.
+hotflow paper-soak --mixed --cycles 5
+# writes reports/paper-soak-mixed-*.json with totals.reasons / overlay_applied
 ```
 
 `--flatten` closes open paper qty at collected marks. `--kill-drill` opens and

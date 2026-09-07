@@ -95,6 +95,7 @@ class RiskEngine:
         latency_ms: float | None,
         now: datetime | None = None,
         requested_notional: float | None = None,
+        enforce_cooldown: bool = True,
     ) -> RiskDecision:
         if self.kills.tripped:
             return RiskDecision(allowed=False, veto=True, reason=ReasonCode.KILL_SWITCH, detail=str(self.kills.reason))
@@ -167,7 +168,7 @@ class RiskEngine:
             return RiskDecision(allowed=False, veto=True, reason=ReasonCode.LATENCY, detail="max_latency")
 
         current = now or datetime.now(UTC)
-        if self.state.last_order_at is not None:
+        if enforce_cooldown and self.state.last_order_at is not None:
             elapsed_ms = (current - self.state.last_order_at).total_seconds() * 1000.0
             needed = cfg.cooldown_after_losses_ms if self.state.last_was_loss else cfg.cooldown_ms
             if elapsed_ms < needed:

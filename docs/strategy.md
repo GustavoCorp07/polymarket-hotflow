@@ -102,8 +102,11 @@ features — candle-only fixtures are refused. Fill simulation applies documente
 paper latency, queue penalty, maker fill probability, and taker delay. Fees
 come from the dated fixture schedule via the official taker formula.
 Train / validation / OOS splits plus `hotflow walk-forward` on existing
-closed trades (expanding or rolling; fold-size caveats). Do not pick a
-strategy by max absolute walk-forward PnL.
+closed trades (expanding or rolling; fold-size caveats). Mixed soak JSON
+(`paper-soak --mixed`) splits by **detected** detector labels on proposals,
+not the `--long` synthetic `regime=` notes. A 5-cycle fixture is too small
+for strong folds; the report says so instead of inventing significance.
+Do not pick a strategy by max absolute walk-forward PnL.
 Do not pick a strategy by max absolute backtest PnL.
 
 `hotflow tune` may suggest bounded threshold/weight changes from expectancy,
@@ -124,3 +127,67 @@ HMS, opportunity, style, `TRADE|SKIP`, reason codes.
 
 Capped fractional Kelly from edge, confidence, liquidity, and hard risk caps.
 No martingale. No auto risk-up after losses.
+
+## Portfolio allocation (Parte 24)
+
+When several markets are hot in the same scan, capital is **not** first-come.
+`evaluate_markets` (paper-run / shadow / `run_scan`) scores the batch, then
+`PortfolioAllocator` ranks by a weighted mix of opportunity score, risk-adjusted
+PnL velocity, net edge, and liquidity. Velocity is never maximized alone.
+
+The allocator **proposes** TAKE / DOWNSIZE / SKIP. Risk VETO remains absolute
+and can still block a TAKE (spread, kill switch, category/total caps, …).
+
+Correlations are never estimated from prints. A pair is linked only when an
+explicit rule fires:
+
+| Rule | When it fires | Documented assumption |
+| --- | --- | --- |
+| Same underlying | Shared official Chainlink symbol or documented alias (`btc/usd`, …) | Same parsed underlying |
+| Same category + window | Both have a parsed window (5m / 15m / 4h / official 30s/60s) | Same category and window can be the same horizon bet |
+| Tag overlap | ≥ `portfolio.tag_overlap_min` tags after dropping generics | Shared specific tags only |
+| YAML group | Named group in `configs/default.yaml` | Group `assumption` string |
+
+Default groups: `crypto_short_window` (5m/15m and official 30s/60s TWAP across
+BTC/ETH/SOL — **not** a measured rho), `weather_city`, `sports_game`,
+`esports_match`. Weather/sports/esports buckets are keyed by parsed city/game/
+match, so Chicago vs London can both pass.
+
+Detected regime labels (Parte 25) and optional fixture stamp
+`raw_gamma.hotflow_regime` may **scale** a group's cap. They do not invent a
+new correlation link. Skip reason: `CORRELATED_EXPOSURE`. Partial room:
+`PORTFOLIO_DOWNSIZED` (still goes to risk). Concentration vs open/category/total:
+`PORTFOLIO_CONCENTRATION`.
+
+## Regime detection (Parte 25)
+
+Labels are attached on evaluate / scan (`extras.regime`). Detectors use
+**explicit features only**. Missing spread, TTR, news apply, forecast
+dispersion, or sports period → that rule does not fire; primary is `N/A`
+(`invented: false`).
+
+| Category | Labels | Features |
+| --- | --- | --- |
+| Crypto | `low_volatility` / `normal` / `high_volatility` / `trend` / `mean_reversion` / `news_shock` / `liquidity_vacuum` / `near_resolution` | book spread, TTR, validated news apply+class, liquidity, imbalance+last trade vs mid |
+| Sports | `pre_game` / `early_live` / `mid_game` / `late_game` / `overtime` | official Sports WS `live` / `ended` / `period` / `status` |
+| Weather | `forecast_uncertainty_high` / `forecast_converging` / `observation_phase` / `near_resolution` | TTR + labeled forecast std or ensemble_spread |
+
+YAML `regimes.strategies.<category>.disabled_regimes` (or a non-empty
+`enabled_regimes` allow-list) can skip with `REGIME_DISABLED`. That is a
+strategy gate. **Risk VETO is unchanged** and still runs on every TAKE.
+
+`portfolio.regimes` maps a detected label id (e.g. `news_shock`) to group-cap
+scales. No learned ML regimes in this pass.
+
+## Mixed paper soak
+
+`hotflow paper-soak --mixed` is PAPER-only and **fixture-driven** (not a live
+Gamma scan). One book includes BTC+ETH 5m, BTC+ETH 15m, Chicago weather, and
+NBA, plus a labeled news-shock recipe. It measures how often
+`CORRELATED_EXPOSURE` / `PORTFOLIO_DOWNSIZED` / regime overlays fire.
+
+5m vs 15m is not a free extra slot: `same_category_window` links equal
+windows only; `same_underlying` links BTC 5m↔15m; YAML `crypto_short_window`
+joins all short windows (`max_markets: 1` by default). That is an explicit
+group, not a measured rho. `--long` remains the labeled ≥50-close ledger soak
+and does not go through the allocator.

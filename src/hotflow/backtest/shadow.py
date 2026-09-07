@@ -122,8 +122,8 @@ def run_shadow(
     pipe = pipeline or PaperPipeline(config, use_twap_fixtures=True, obs=watcher)
     rows: list[dict[str, Any]] = []
     prices = next_prices or {}
-    for market in markets:
-        result = pipe.evaluate_market(market, p_info=p_info)
+    evaluated = pipe.evaluate_markets(markets, p_info=p_info)
+    for market, result in zip(markets, evaluated, strict=True):
         rows.append(
             attach_shadow_fields(
                 result,
@@ -178,11 +178,11 @@ class ShadowSession:
         marks: dict[str, float] = {}
         rows: list[dict[str, Any]] = []
         prices = next_prices or {}
-        for market in markets:
+        evaluated = self.pipe.evaluate_markets(markets, p_info=p_info)
+        for market, result in zip(markets, evaluated, strict=True):
             mid = _observed_mid(market)
             if mid is not None:
                 marks[market.market_id] = mid
-            result = self.pipe.evaluate_market(market, p_info=p_info)
             rows.append(
                 attach_shadow_fields(
                     result,
@@ -312,13 +312,11 @@ def compare_shadow_vs_paper(
     shadow_cfg.trading.shadow = True
     paper_pipe = PaperPipeline(paper_cfg, use_twap_fixtures=True)
     shadow_pipe = PaperPipeline(shadow_cfg, use_twap_fixtures=True)
+    paper_rows = paper_pipe.evaluate_markets(markets, p_info=p_info)
+    shadow_rows = shadow_pipe.evaluate_markets(markets, p_info=p_info)
     pairs: list[dict[str, Any]] = []
-    for market in markets:
-        paper = paper_pipe.evaluate_market(market, p_info=p_info)
-        shadow = attach_shadow_fields(
-            shadow_pipe.evaluate_market(market, p_info=p_info),
-            market_id=market.market_id,
-        )
+    for market, paper, shadow_raw in zip(markets, paper_rows, shadow_rows, strict=True):
+        shadow = attach_shadow_fields(shadow_raw, market_id=market.market_id)
         paper_side = None
         paper_px = None
         order = paper.get("order") if isinstance(paper.get("order"), dict) else None

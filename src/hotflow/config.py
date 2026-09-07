@@ -199,6 +199,167 @@ class SizingConfig(BaseModel):
     book_frac: float = 0.15
 
 
+class PortfolioRankConfig(BaseModel):
+    """Weights for ranking simultaneous candidates. Velocity is never used alone."""
+
+    opportunity: float = 1.0
+    pnl_velocity: float = 1.0
+    net_edge: float = 0.5
+    liquidity: float = 0.25
+
+
+class PortfolioRulesConfig(BaseModel):
+    """Explicit correlation switches. No estimated residual / price-implied rho."""
+
+    same_underlying: bool = True
+    same_category_window: bool = True
+    tag_overlap: bool = True
+    yaml_groups: bool = True
+
+
+class CorrelationGroupConfig(BaseModel):
+    """Named exposure bucket. Membership is rule-based, never inferred from prints."""
+
+    id: str
+    assumption: str
+    category: str | None = None
+    windows: list[str] = Field(default_factory=list)
+    underlyings: list[str] = Field(default_factory=list)
+    tags_any: list[str] = Field(default_factory=list)
+    key: str | None = None  # city | game | match — buckets by that identity field
+    max_exposure: float | None = None  # default: risk.max_correlated_exposure
+    max_markets: int = 1
+
+
+class PortfolioRegimeConfig(BaseModel):
+    """Allocator overlay. Applied when a detected or fixture label is present."""
+
+    id: str
+    assumption: str
+    group_scales: dict[str, float] = Field(default_factory=dict)
+
+
+class RegimeCryptoConfig(BaseModel):
+    """Explicit crypto heuristics. Missing spread/TTR/news → that rule does not fire."""
+
+    near_resolution_s: float = 900.0
+    high_vol_spread: float = 0.08
+    low_vol_spread: float = 0.015
+    liquidity_vacuum: float = 200.0
+    vacuum_spread: float = 0.06
+    news_shock_min_relevance: float = 0.4
+    news_shock_classes: list[str] = Field(default_factory=lambda: ["official", "wire", "breaking"])
+    trend_imbalance: float = 0.35
+    mean_reversion_imbalance: float = 0.10
+    mean_reversion_dev: float = 0.02
+
+
+class RegimeSportsConfig(BaseModel):
+    """Official Sports WS period/live/ended only. No invented clock."""
+
+    enabled: bool = True
+
+
+class RegimeWeatherConfig(BaseModel):
+    """TTR + labeled forecast dispersion. Missing both → N/A."""
+
+    near_resolution_s: float = 3_600.0
+    observation_phase_s: float = 21_600.0
+    uncertain_std_frac: float = 0.15
+    converging_std_frac: float = 0.05
+
+
+class RegimeStrategyConfig(BaseModel):
+    """Empty enabled_regimes = all allowed except disabled_regimes."""
+
+    enabled_regimes: list[str] = Field(default_factory=list)
+    disabled_regimes: list[str] = Field(default_factory=list)
+
+
+class RegimeConfig(BaseModel):
+    """Parte 25 — first-class detectors. Never bypass risk."""
+
+    enabled: bool = True
+    crypto: RegimeCryptoConfig = Field(default_factory=RegimeCryptoConfig)
+    sports: RegimeSportsConfig = Field(default_factory=RegimeSportsConfig)
+    weather: RegimeWeatherConfig = Field(default_factory=RegimeWeatherConfig)
+    strategies: dict[str, RegimeStrategyConfig] = Field(
+        default_factory=lambda: {
+            "crypto": RegimeStrategyConfig(),
+            "weather": RegimeStrategyConfig(),
+            "sports": RegimeStrategyConfig(),
+            "esports": RegimeStrategyConfig(),
+        }
+    )
+
+
+class PortfolioConfig(BaseModel):
+    """Parte 24 — propose sizes/selection. Risk VETO remains absolute."""
+
+    enabled: bool = True
+    rank: PortfolioRankConfig = Field(default_factory=PortfolioRankConfig)
+    min_allocate_fraction: float = 0.25
+    tag_overlap_min: int = 2
+    generic_tags: list[str] = Field(
+        default_factory=lambda: ["crypto", "weather", "sports", "esports", "other"]
+    )
+    rules: PortfolioRulesConfig = Field(default_factory=PortfolioRulesConfig)
+    groups: list[CorrelationGroupConfig] = Field(
+        default_factory=lambda: [
+            CorrelationGroupConfig(
+                id="crypto_short_window",
+                assumption=(
+                    "Short-window crypto Up/Down (5m/15m and official 30s/60s TWAP) "
+                    "can be the same macro bet across BTC/ETH/SOL. Not a measured rho."
+                ),
+                category="crypto",
+                windows=["5m", "15m", "30s", "60s"],
+                max_markets=1,
+            ),
+            CorrelationGroupConfig(
+                id="weather_city",
+                assumption="Same-city weather contracts share the official observation.",
+                category="weather",
+                key="city",
+                max_markets=1,
+            ),
+            CorrelationGroupConfig(
+                id="sports_game",
+                assumption="Contracts on the same parsed game share the sports outcome.",
+                category="sports",
+                key="game",
+                max_markets=1,
+            ),
+            CorrelationGroupConfig(
+                id="esports_match",
+                assumption="Contracts on the same parsed match share the esports outcome.",
+                category="esports",
+                key="match",
+                max_markets=1,
+            ),
+        ]
+    )
+    regimes: list[PortfolioRegimeConfig] = Field(
+        default_factory=lambda: [
+            PortfolioRegimeConfig(
+                id="news_shock",
+                assumption="Detected or fixture news-shock: tighten short-window crypto cap.",
+                group_scales={"crypto_short_window": 0.5},
+            ),
+            PortfolioRegimeConfig(
+                id="liquidity_vacuum",
+                assumption="Detected liquidity vacuum: tighten short-window crypto cap.",
+                group_scales={"crypto_short_window": 0.5},
+            ),
+            PortfolioRegimeConfig(
+                id="near_resolution",
+                assumption="Near-resolution weather: tighten same-city weather cap.",
+                group_scales={"weather_city": 0.5},
+            ),
+        ]
+    )
+
+
 class MakerTakerConfig(BaseModel):
     maker_fill_probability: float = 0.35
     maker_adverse_mult: float = 1.30
@@ -353,6 +514,8 @@ class HotflowConfig(BaseModel):
     recorder: RecorderConfig = Field(default_factory=RecorderConfig)
     tuner: TunerConfig = Field(default_factory=TunerConfig)
     news: NewsEngineConfig = Field(default_factory=NewsEngineConfig)
+    portfolio: PortfolioConfig = Field(default_factory=PortfolioConfig)
+    regimes: RegimeConfig = Field(default_factory=RegimeConfig)
 
     @property
     def is_paper(self) -> bool:

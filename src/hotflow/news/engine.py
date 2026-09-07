@@ -103,6 +103,10 @@ class NewsEngine:
     def reset_seen(self) -> None:
         self._seen.clear()
 
+    def clear(self) -> None:
+        self.items.clear()
+        self._seen.clear()
+
     def candidates_for(self, market: MarketRecord) -> list[NewsItem]:
         matched: list[NewsItem] = []
         for item in self.items:
