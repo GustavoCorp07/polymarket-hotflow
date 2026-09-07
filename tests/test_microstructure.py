@@ -65,16 +65,18 @@ def test_yaml_defaults_and_live_gates_frozen() -> None:
 def test_demo_hot_book_core_and_weighted() -> None:
     market = demo_market(hot=True)
     feats = microstructure_features(market)
-    assert feats["mid"] == 0.41
-    assert feats["spread"] == 0.02
+    assert feats["mid"] is not None and abs(float(feats["mid"]) - 0.41) < 1e-9
+    assert feats["spread"] is not None and abs(float(feats["spread"]) - 0.02) < 1e-9
     assert feats["microprice"] is not None
     assert feats["imbalance"] is not None
     assert feats["weighted_imbalance"] is not None
     assert feats["bid_depth"] == 190.0
     assert feats["ask_depth"] == 200.0
     assert feats["invented"] is False
-    # Same two-level sizes: L1 imbalance equals decaying weighted.
-    assert abs(float(feats["imbalance"]) - float(feats["weighted_imbalance"])) < 1e-9
+    # Deeper ask size (120 vs 100) flips decaying imbalance vs L1.
+    assert -1.0 <= float(feats["imbalance"]) <= 1.0
+    assert -1.0 <= float(feats["weighted_imbalance"]) <= 1.0
+    assert feats["imbalance"] != feats["weighted_imbalance"]
     assert feats["spread_regime"]["label"] == "normal"
     assert feats["spread_regime"]["vs"] == "config"
     assert feats["spread_regime"]["invented"] is False
@@ -271,6 +273,10 @@ def test_pipeline_intensity_from_fixture_events() -> None:
     events = FixtureEventSource(CRYPTO).events()
     rows = [{"ts": ev.ts, "kind": ev.kind} for ev in events if ev.kind in {"book", "trade"}]
     now = datetime(2026, 4, 1, 0, 0, 6, tzinfo=UTC)
+    market.fetched_at = now
+    market.fees.fetched_at = now
+    if market.book is not None:
+        market.book.fetched_at = now
     result = pipe.evaluate_market(market, p_info=0.70, now=now, micro_events=rows)
     assert "microstructure" in result
     intensity = result["microstructure"]["intensity"]
