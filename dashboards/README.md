@@ -1,7 +1,42 @@
 # Dashboards
 
-Paper-mode scrape notes only. Full Grafana dashboards are optional and not
-shipped. Do not invent Polymarket endpoints or fee series.
+## Built-in paper UI (no Grafana required)
+
+Same process as the paper bot. Localhost only. PAPER ledger numbers — never
+venue balances, never LIVE transmit, no secrets on the page.
+
+```bash
+# Default: mock fixtures, UI on 127.0.0.1:9109, keep the server after the cycle
+hotflow dashboard --mock
+
+# Watch a longer soak on the same page (SSE + poll fallback)
+hotflow paper-run --mock --cycles 8 --dashboard
+hotflow paper-soak --cycles 5 --dashboard
+
+# Serve the page only (idle gauges until a session publishes)
+hotflow dashboard --idle
+```
+
+Open **http://127.0.0.1:9109/** in a browser.
+
+The same server keeps Prometheus scrape and probes:
+
+| Path | Role |
+| --- | --- |
+| `/` | Single-page paper watch UI |
+| `/api/state` | JSON snapshot (short-poll) |
+| `/events` | Server-sent events (primary live updates) |
+| `/metrics` | Prometheus text |
+| `/health` `/ready` | JSON probes |
+
+`hotflow paper-run --mock --serve-metrics` still binds **:9108** and now also
+serves `/` on that port. `--dashboard` prefers **:9109** so Grafana scrape and
+the watch UI can coexist if you run both styles.
+
+**SSE vs poll:** the page opens `EventSource("/events")` and falls back to
+1.5s `GET /api/state` if SSE drops. SSE is cheaper on the wire; poll is the
+compatible path through picky proxies. Stdlib `http.server` only — no extra
+deps.
 
 ## Prometheus scrape
 
@@ -42,4 +77,5 @@ Health JSON: `GET /health` and `GET /ready` on the same process. Ready is 503
 if the kill switch is tripped or mode is LIVE.
 
 Grafana: add this Prometheus datasource and build panels from the table
-above. Do not commit secrets into dashboard JSON.
+above. Optional — the built-in `/` UI is enough to watch a local paper run.
+Do not commit secrets into dashboard JSON.

@@ -502,6 +502,7 @@ class StorageConfig(BaseModel):
 
 class MonitoringConfig(BaseModel):
     prometheus_port: int = 9108
+    dashboard_port: int = 9109
     json_logs: bool = True
     http_enabled: bool = False
     http_bind: str = "127.0.0.1"
