@@ -27,4 +27,6 @@ jobs:
       - name: Secret hygiene
         run: |
           test ! -f .env
-          ! git grep -n "BEGIN .*PRIVATE KEY" -- ':!docs' ':!tests/test_kimi.py' ':!src/hotflow/ai_research/kimi_client.py'
+          # Real PEM headers only — do not use a pattern that matches this workflow line.
+          ! git grep -nE -e '-----BEGIN ([A-Z0-9]+ )?PRIVATE KEY-----' \
+            -- ':!.github' ':!docs' ':!tests/test_kimi.py' ':!src/hotflow/ai_research/kimi_client.py'
