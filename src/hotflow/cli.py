@@ -701,6 +701,59 @@ def failure_soak(
 
 
 @app.command()
+def performance(
+    config: Path | None = typer.Option(None, "--config", "-c"),
+    report: Path | None = typer.Option(None, "--report", help="Existing paper/backtest JSON (no invented trades)"),
+    from_reports: Path | None = typer.Option(None, "--from-reports", help="Load latest paper/backtest JSON"),
+    rank_by: str | None = typer.Option(None, "--rank-by", help="Refuses abs_pnl / pnl"),
+    out: Path | None = typer.Option(None, "--out"),
+) -> None:
+    """Review Gross/Net/fees/win-rate/decay from existing reports. Suggestion-only."""
+    from hotflow.analytics.review import build_review, format_review, load_review_source
+
+    cfg = load_config(config)
+    if cfg.trading.mode.lower() == "live":
+        raise typer.BadParameter("performance refuses LIVE mode")
+    payload_in, source = load_review_source(report, from_reports)
+    if payload_in is None and report is None and from_reports is None:
+        raise typer.BadParameter("pass --report or --from-reports; will not invent trades")
+    body = build_review(payload_in, source=source, rank_metric=rank_by)
+    target = out or Path(cfg.storage.reports_dir) / (
+        f"performance-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}.json"
+    )
+    write_report(target, body)
+    typer.echo(format_review(body))
+    typer.echo(f"report={target}")
+    if body.get("refused"):
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def decay(
+    config: Path | None = typer.Option(None, "--config", "-c"),
+    report: Path | None = typer.Option(None, "--report"),
+    from_reports: Path | None = typer.Option(None, "--from-reports"),
+    out: Path | None = typer.Option(None, "--out"),
+) -> None:
+    """Alpha-decay windows vs baseline. Never auto-disables a strategy."""
+    from hotflow.analytics.review import build_review, format_review, load_review_source
+
+    cfg = load_config(config)
+    if cfg.trading.mode.lower() == "live":
+        raise typer.BadParameter("decay refuses LIVE mode")
+    payload_in, source = load_review_source(report, from_reports)
+    if payload_in is None and report is None and from_reports is None:
+        raise typer.BadParameter("pass --report or --from-reports; will not invent trades")
+    body = build_review(payload_in, source=source)
+    target = out or Path(cfg.storage.reports_dir) / (
+        f"decay-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}.json"
+    )
+    write_report(target, body)
+    typer.echo(format_review(body))
+    typer.echo(f"auto_disable=False report={target}")
+
+
+@app.command()
 def readiness(
     config: Path | None = typer.Option(None, "--config", "-c"),
     from_reports: Path | None = typer.Option(

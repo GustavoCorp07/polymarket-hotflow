@@ -57,6 +57,8 @@ hotflow failure-soak
 hotflow live-gates
 hotflow readiness
 hotflow news-fixtures
+hotflow performance --from-reports reports
+hotflow decay --from-reports reports
 hotflow paper-run --mock --cycles 3 --flatten
 hotflow paper-soak --cycles 5
 

@@ -111,7 +111,8 @@ No scattered magic numbers in strategy code.
 
 Also: resolution parser (unknown rules ⇒ DO_NOT_TRADE), basic filter,
 microstructure (mid/microprice/imbalance), capped Kelly sizing, maker/taker EV,
-PnL velocity, regime labels, Parte 46 signal-quality JSON.
+PnL velocity, regime labels, Parte 46 signal-quality JSON, Parte 52–53
+performance/decay reviews from existing ledger/backtest JSON (suggestion-only).
 
 ## Weather / sports paper adapters
 

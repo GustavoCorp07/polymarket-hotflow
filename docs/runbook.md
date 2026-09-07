@@ -25,7 +25,9 @@ hotflow readiness
 hotflow news-fixtures
 hotflow paper-run --mock --news-fixtures
 hotflow shadow --mock --news-fixtures
-pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py tests/test_weather_gamma_fixtures.py tests/test_esports.py tests/test_sports_cache.py tests/test_backtest.py tests/test_recorder.py tests/test_tuner.py tests/test_observability.py tests/test_paper_ledger.py tests/test_paper_gates.py tests/test_shadow_gates.py tests/test_failure_injection.py tests/test_live_gates.py tests/test_security_hygiene.py tests/test_readiness.py tests/test_news_engine.py
+hotflow performance --report reports/paper-soak-default.json
+hotflow decay --from-reports reports
+pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py tests/test_weather_gamma_fixtures.py tests/test_esports.py tests/test_sports_cache.py tests/test_backtest.py tests/test_recorder.py tests/test_tuner.py tests/test_observability.py tests/test_paper_ledger.py tests/test_paper_gates.py tests/test_shadow_gates.py tests/test_failure_injection.py tests/test_live_gates.py tests/test_security_hygiene.py tests/test_readiness.py tests/test_news_engine.py tests/test_performance.py
 pytest -q
 ```
 
@@ -172,6 +174,28 @@ hotflow shadow --mock --news-fixtures
 
 News is classify → validate → impact features → existing FV/risk.
 It never places an order. `--fetch-public` stays off and does not scrape.
+
+## Performance / alpha decay (PAPER)
+
+```bash
+hotflow performance --report reports/paper-soak-default.json
+hotflow performance --from-reports reports
+hotflow decay --report reports/backtest-*.json
+# or: python scripts/performance.py --report ...
+```
+
+Reviews **existing** paper-ledger / backtest JSON only (Gross/Net, fees,
+slippage when present, win rate, profit factor, drawdown, MAE/MFE/holding
+when events include them). Tiny samples are labeled; no strong conclusions.
+`--rank-by abs_pnl` is refused (`MAX_ABS_PNL_SELECTION_REFUSED`).
+
+Decay compares recent 50 / 100 / 500 (clipped to whatever exists) vs an
+earlier baseline with stderr + a lite bootstrap CI. Flags are
+**suggestion-only** — they never auto-disable a strategy or change
+`hotflow readiness` `ok`.
+
+Signal half-life buckets come from report metadata (`signal_half_life_ms`);
+otherwise `N/A`. Kimi `PERFORMANCE_ANALYST` is cold-path only.
 
 ## Readiness rollup
 

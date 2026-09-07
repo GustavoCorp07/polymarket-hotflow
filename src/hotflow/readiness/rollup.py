@@ -194,6 +194,8 @@ def build_readiness(
     shadow_ready = _group_ok(evaluate_shadow(shadow, source=src.get("shadow")))
     failure_ready = _group_ok(evaluate_failure(failure, source=src.get("failure")))
     live_frozen = _group_ok(evaluate_live_gates(live_gates, source=src.get("live_gates")))
+    from hotflow.analytics.review import informational_section
+
     payload = {
         "mode": "paper",
         "live_ready": False,
@@ -205,6 +207,7 @@ def build_readiness(
         "checks": checks,
         "remaining_live_blockers": remaining_live_blockers(live_gates, failure),
         "sources": {key: src.get(key) for key in ("paper", "shadow", "failure", "live_gates")},
+        "performance": informational_section(paper, source=src.get("paper")),
         "note": "live_ready is always false; signing/transmit are not implemented.",
     }
     cleaned = redact(payload)
@@ -246,6 +249,12 @@ def format_summary(report: dict[str, Any]) -> str:
         if not isinstance(check, dict):
             continue
         lines.append(f"  {check.get('id')} {check.get('status')} {check.get('detail')}")
+    perf = report.get("performance")
+    if isinstance(perf, dict):
+        lines.append(
+            f"  performance {perf.get('status')} informational n={((perf.get('sample') or {}).get('n'))} "
+            f"does_not_affect_ok={perf.get('does_not_affect_ok')}"
+        )
     lines.append("remaining LIVE blockers:")
     for item in report.get("remaining_live_blockers") or []:
         lines.append(f"  - {item}")
