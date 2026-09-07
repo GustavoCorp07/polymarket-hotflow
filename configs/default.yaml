@@ -1,0 +1,132 @@
+trading:
+  mode: paper          # paper | live  (live still requires env + acceptance flags)
+  shadow: false        # score + persist signals, never create orders
+  session_id: local-paper
+  paper_starting_cash: 10000.0
+  paper_fill_ratio: 0.55   # simulator partial-fill fraction per ack
+  min_required_edge: 0.012
+  categories:
+    crypto: true
+    weather: true
+    sports: true
+    esports: true
+    other: true
+
+live:
+  accept_live_trading: false
+  accept_capital_at_risk: false
+  i_understand_orders_are_real: false
+
+scanner:
+  gamma_limit: 50
+  gamma_offset: 0
+  max_markets: 40
+  require_accepting_orders: true
+  require_enable_order_book: true
+  min_liquidity: 200.0
+  min_volume_24h: 50.0
+  max_spread: 0.12
+  fetch_clob_books: true
+  fetch_clob_fees: true
+  closed: false
+  # Dynamic discovery — empty means all tags; this is not a category whitelist.
+  include_tags: []
+  exclude_closed: true
+
+hot_market:
+  min_score_to_trade: 50.0
+  weights:
+    liquidity: 0.28
+    volume: 0.22
+    spread: 0.20
+    book_open: 0.12
+    competitive: 0.08
+    persistence: 0.10
+  # log10 anchors used only for 0–1 feature scaling (not exchange parameters)
+  liquidity_ref: 10000.0
+  volume_ref: 5000.0
+  max_spread_for_full_score: 0.08
+  tiers:
+    cold: 0.0
+    warm: 25.0
+    hot: 50.0
+    ultra_hot: 75.0
+
+opportunity:
+  weights:
+    expected_net_edge: 1.0
+    confidence: 1.0
+    liquidity: 1.0
+    persistence: 1.0
+    execution_probability: 1.0
+  min_score: 0.0
+
+fair_value:
+  latency_haircut: 0.0015
+  adverse_selection_haircut: 0.0020
+  default_confidence: 0.55
+  crypto:
+    enabled: true
+    # Official Chainlink/RTDS windows only: 30 or 60. Not a homemade TWAP.
+    twap_window_seconds: 60
+    prior_blend: 0.35
+
+risk:
+  max_order_notional: 250.0
+  max_market_exposure: 750.0
+  max_category_exposure: 2000.0
+  max_total_exposure: 5000.0
+  max_daily_loss: 400.0
+  max_session_loss: 250.0
+  max_drawdown: 0.12
+  max_open_orders: 8
+  max_concurrent_markets: 6
+  max_slippage: 0.03
+  max_spread: 0.10
+  max_data_age_ms: 30000   # REST snapshot age after a batch scan; WS uses feeds.*.max_data_age_ms
+  max_latency_ms: 1500
+  cooldown_ms: 1500
+  runaway_reject_count: 5
+  no_martingale: true
+
+feeds:
+  gamma:
+    max_data_age_ms: 30000
+    critical: false
+  clob_book:
+    max_data_age_ms: 30000
+    critical: true
+  clob_fees:
+    max_data_age_ms: 60000
+    critical: true
+  market_ws:
+    max_data_age_ms: 15000
+    critical: true
+    ping_interval_s: 10          # official CLOB market/user WS
+  user_ws:
+    max_data_age_ms: 15000
+    critical: true
+    ping_interval_s: 10
+  rtds:
+    max_data_age_ms: 10000
+    critical: false
+    ping_interval_s: 5           # official RTDS
+  sports_ws:
+    max_data_age_ms: 15000
+    critical: false
+
+ai_research:
+  base_url: https://api.moonshot.ai/v1
+  model: kimi-k3
+  reasoning_effort: high         # max reserved for hard tasks
+  hard_task_reasoning_effort: max
+  timeout_s: 120
+
+storage:
+  sqlite_path: data/hotflow.sqlite
+  parquet_dir: data/parquet
+  reports_dir: reports
+
+monitoring:
+  prometheus_port: 9108
+  json_logs: true

@@ -1,0 +1,215 @@
+"""YAML-first configuration. No scattered magic numbers in strategies."""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+from typing import Any
+
+import yaml
+from pydantic import BaseModel, Field
+
+
+class LiveGates(BaseModel):
+    accept_live_trading: bool = False
+    accept_capital_at_risk: bool = False
+    i_understand_orders_are_real: bool = False
+
+
+class CategoryToggles(BaseModel):
+    crypto: bool = True
+    weather: bool = True
+    sports: bool = True
+    esports: bool = True
+    other: bool = True
+
+
+class TradingConfig(BaseModel):
+    mode: str = "paper"
+    shadow: bool = False
+    session_id: str = "local-paper"
+    paper_starting_cash: float = 10_000.0
+    paper_fill_ratio: float = 0.55
+    min_required_edge: float = 0.012
+    categories: CategoryToggles = Field(default_factory=CategoryToggles)
+
+
+class ScannerConfig(BaseModel):
+    gamma_limit: int = 50
+    gamma_offset: int = 0
+    max_markets: int = 40
+    require_accepting_orders: bool = True
+    require_enable_order_book: bool = True
+    min_liquidity: float = 200.0
+    min_volume_24h: float = 50.0
+    max_spread: float = 0.12
+    fetch_clob_books: bool = True
+    fetch_clob_fees: bool = True
+    closed: bool = False
+    include_tags: list[str] = Field(default_factory=list)
+    exclude_closed: bool = True
+
+
+class HotMarketWeights(BaseModel):
+    liquidity: float = 0.28
+    volume: float = 0.22
+    spread: float = 0.20
+    book_open: float = 0.12
+    competitive: float = 0.08
+    persistence: float = 0.10
+
+
+class HotMarketTiers(BaseModel):
+    cold: float = 0.0
+    warm: float = 25.0
+    hot: float = 50.0
+    ultra_hot: float = 75.0
+
+
+class HotMarketConfig(BaseModel):
+    min_score_to_trade: float = 50.0
+    weights: HotMarketWeights = Field(default_factory=HotMarketWeights)
+    liquidity_ref: float = 10_000.0
+    volume_ref: float = 5_000.0
+    max_spread_for_full_score: float = 0.08
+    tiers: HotMarketTiers = Field(default_factory=HotMarketTiers)
+
+
+class OpportunityWeights(BaseModel):
+    expected_net_edge: float = 1.0
+    confidence: float = 1.0
+    liquidity: float = 1.0
+    persistence: float = 1.0
+    execution_probability: float = 1.0
+
+
+class OpportunityConfig(BaseModel):
+    weights: OpportunityWeights = Field(default_factory=OpportunityWeights)
+    min_score: float = 0.0
+
+
+class CryptoFairValueConfig(BaseModel):
+    enabled: bool = True
+    twap_window_seconds: int = 60
+    prior_blend: float = 0.35
+
+
+class FairValueConfig(BaseModel):
+    latency_haircut: float = 0.0015
+    adverse_selection_haircut: float = 0.0020
+    default_confidence: float = 0.55
+    crypto: CryptoFairValueConfig = Field(default_factory=CryptoFairValueConfig)
+
+
+class RiskConfig(BaseModel):
+    max_order_notional: float = 250.0
+    max_market_exposure: float = 750.0
+    max_category_exposure: float = 2_000.0
+    max_total_exposure: float = 5_000.0
+    max_daily_loss: float = 400.0
+    max_session_loss: float = 250.0
+    max_drawdown: float = 0.12
+    max_open_orders: int = 8
+    max_concurrent_markets: int = 6
+    max_slippage: float = 0.03
+    max_spread: float = 0.10
+    max_data_age_ms: int = 30_000
+    max_latency_ms: int = 1_500
+    cooldown_ms: int = 1_500
+    runaway_reject_count: int = 5
+    no_martingale: bool = True
+
+
+class FeedConfig(BaseModel):
+    max_data_age_ms: int = 8_000
+    critical: bool = False
+    ping_interval_s: int | None = None
+
+
+class FeedsConfig(BaseModel):
+    gamma: FeedConfig = Field(default_factory=lambda: FeedConfig(max_data_age_ms=30_000))
+    clob_book: FeedConfig = Field(
+        default_factory=lambda: FeedConfig(max_data_age_ms=30_000, critical=True)
+    )
+    clob_fees: FeedConfig = Field(
+        default_factory=lambda: FeedConfig(max_data_age_ms=60_000, critical=True)
+    )
+    market_ws: FeedConfig = Field(
+        default_factory=lambda: FeedConfig(max_data_age_ms=15_000, critical=True, ping_interval_s=10)
+    )
+    user_ws: FeedConfig = Field(
+        default_factory=lambda: FeedConfig(max_data_age_ms=15_000, critical=True, ping_interval_s=10)
+    )
+    rtds: FeedConfig = Field(
+        default_factory=lambda: FeedConfig(max_data_age_ms=10_000, ping_interval_s=5)
+    )
+    sports_ws: FeedConfig = Field(default_factory=lambda: FeedConfig(max_data_age_ms=15_000))
+
+
+class AIResearchConfig(BaseModel):
+    base_url: str = "https://api.moonshot.ai/v1"
+    model: str = "kimi-k3"
+    reasoning_effort: str = "high"
+    hard_task_reasoning_effort: str = "max"
+    timeout_s: int = 120
+
+
+class StorageConfig(BaseModel):
+    sqlite_path: str = "data/hotflow.sqlite"
+    parquet_dir: str = "data/parquet"
+    reports_dir: str = "reports"
+
+
+class MonitoringConfig(BaseModel):
+    prometheus_port: int = 9108
+    json_logs: bool = True
+
+
+class HotflowConfig(BaseModel):
+    trading: TradingConfig = Field(default_factory=TradingConfig)
+    live: LiveGates = Field(default_factory=LiveGates)
+    scanner: ScannerConfig = Field(default_factory=ScannerConfig)
+    hot_market: HotMarketConfig = Field(default_factory=HotMarketConfig)
+    opportunity: OpportunityConfig = Field(default_factory=OpportunityConfig)
+    fair_value: FairValueConfig = Field(default_factory=FairValueConfig)
+    risk: RiskConfig = Field(default_factory=RiskConfig)
+    feeds: FeedsConfig = Field(default_factory=FeedsConfig)
+    ai_research: AIResearchConfig = Field(default_factory=AIResearchConfig)
+    storage: StorageConfig = Field(default_factory=StorageConfig)
+    monitoring: MonitoringConfig = Field(default_factory=MonitoringConfig)
+
+    @property
+    def is_paper(self) -> bool:
+        return self.trading.mode.lower() != "live"
+
+
+def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    out = dict(base)
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(out.get(key), dict):
+            out[key] = _deep_merge(out[key], value)
+        else:
+            out[key] = value
+    return out
+
+
+def default_config_path() -> Path:
+    env = os.environ.get("HOTFLOW_CONFIG")
+    if env:
+        return Path(env)
+    here = Path(__file__).resolve().parents[2]
+    return here / "configs" / "default.yaml"
+
+
+def load_config(path: str | Path | None = None) -> HotflowConfig:
+    target = Path(path) if path else default_config_path()
+    raw: dict[str, Any] = {}
+    if target.exists():
+        loaded = yaml.safe_load(target.read_text(encoding="utf-8")) or {}
+        if not isinstance(loaded, dict):
+            raise ValueError(f"Config {target} must be a mapping")
+        raw = loaded
+    mode = os.environ.get("HOTFLOW_TRADING_MODE")
+    if mode:
+        raw = _deep_merge(raw, {"trading": {"mode": mode}})
+    return HotflowConfig.model_validate(raw)
