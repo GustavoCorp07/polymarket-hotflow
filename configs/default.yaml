@@ -220,3 +220,8 @@ storage:
 monitoring:
   prometheus_port: 9108
   json_logs: true
+  http_enabled: false          # optional localhost /metrics /health /ready
+  http_bind: 127.0.0.1
+  alert_drawdown: 0.08         # warn before risk.max_drawdown kill
+  alert_latency_ms: 800
+  alert_slippage: 0.02

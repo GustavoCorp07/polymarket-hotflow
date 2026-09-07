@@ -1,7 +1,8 @@
 # Security (aligned to `docs/MISSION-FULL.md` Parte 37, 60, 62)
 
 - Ship `.env.example` only. Never commit `.env`, keys, or passphrases.
-- Do not put secrets in logs, prompts, reports, or stack traces.
+- Do not put secrets in logs, prompts, reports, alerts, or stack traces.
+  JSON logs and alert callbacks run through `hotflow.monitoring.redact`.
 - Kimi/Grok never receive private keys, seed phrases, or withdrawal credentials.
 - `hotflow.execution` / `hotflow.risk` do not import `hotflow.ai_research`.
 - LIVE needs YAML accept flags **and** `HOTFLOW_ACCEPT_LIVE=1`.

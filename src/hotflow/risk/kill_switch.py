@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
@@ -17,9 +18,10 @@ class KillEvent:
 
 
 class KillSwitchBoard:
-    def __init__(self) -> None:
+    def __init__(self, on_trip: Callable[[KillEvent], None] | None = None) -> None:
         self._active: KillEvent | None = None
         self.history: list[KillEvent] = []
+        self._on_trip = on_trip
 
     @property
     def tripped(self) -> bool:
@@ -33,6 +35,8 @@ class KillSwitchBoard:
         event = KillEvent(reason=reason, detail=detail)
         self._active = event
         self.history.append(event)
+        if self._on_trip is not None:
+            self._on_trip(event)
         return event
 
     def reset(self, *, acknowledge: str) -> None:

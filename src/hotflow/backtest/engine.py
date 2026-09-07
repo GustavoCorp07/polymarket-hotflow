@@ -27,6 +27,7 @@ from hotflow.fairvalue.esports import FixtureEsportsSource
 from hotflow.marketdata.rtds_twap import FixtureTwapSource
 from hotflow.marketdata.sports_ws import FixtureSportsSource
 from hotflow.marketdata.weather_fixtures import FixtureWeatherSource
+from hotflow.monitoring.observer import Observability
 from hotflow.pipeline import PaperPipeline
 from hotflow.reason_codes import ReasonCode
 from hotflow.types import (
@@ -41,8 +42,9 @@ from hotflow.types import (
 
 
 class EventDrivenBacktester:
-    def __init__(self, config: HotflowConfig) -> None:
+    def __init__(self, config: HotflowConfig, obs: Observability | None = None) -> None:
         self.config = config
+        self.obs = obs or Observability.from_config(config, announce_restart=False)
         cfg = config.backtest
         self.assumptions = FillAssumptions(
             latency_ms=cfg.latency_ms,
@@ -94,6 +96,7 @@ class EventDrivenBacktester:
             weather_source=weather_source,
             sports_source=sports_source,
             esports_source=esports_source,
+            obs=self.obs,
         )
 
         book: OrderBook | None = template.book
@@ -273,7 +276,7 @@ class EventDrivenBacktester:
             if wf.enabled
             else []
         )
-        return {
+        payload = {
             "mode": "backtest",
             "backtest_id": str(uuid4()),
             "fixture": fixture_path,
@@ -303,6 +306,9 @@ class EventDrivenBacktester:
             "event_count": len(events),
             "kinds": sorted({item.kind for item in events}),
         }
+        self.obs.observe_backtest_report(payload)
+        self.obs.snapshot_pipeline(pipe)
+        return payload
 
     def _refused(
         self,
@@ -311,7 +317,7 @@ class EventDrivenBacktester:
         fixture_path: str | None,
         detail: str,
     ) -> dict[str, Any]:
-        return {
+        payload = {
             "mode": "backtest",
             "fixture": fixture_path,
             "accepted": False,
@@ -330,6 +336,8 @@ class EventDrivenBacktester:
             "trades": [],
             "event_count": len(events),
         }
+        self.obs.observe_backtest_report(payload)
+        return payload
 
     def _apply(
         self,

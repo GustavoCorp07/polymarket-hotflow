@@ -18,7 +18,7 @@ Source of truth: [`MISSION-FULL.md`](MISSION-FULL.md).
 | 26–27 Backtest / anti-overfit | Event-driven replay (`hotflow backtest --fixture`); longer synthetic + redacted live CLOB book sample; train/val/OOS + walk-forward stub; refuses max-abs-PnL selection |
 | 28 Modes | backtest / paper / shadow (`hotflow shadow --mock`) / live |
 | 29–30 Tuner / experiments | Offline tuner (`hotflow tune`) writes suggestions only; refuses abs-PnL and production config writes |
-| 31–36 Storage / obs / alerts | SQLite/Parquet + Prometheus/JSON |
+| 31–36 Storage / obs / alerts | SQLite/Parquet + structured JSON logs (request/signal/trade/risk, redaction) + Prometheus registry (equity/PnL placeholders, trades, win-rate hooks, fees/slippage, fill ratio, HMS/opportunity, exposure, latency histograms, WS/RTDS/Sports health, API errors, kill switch) + optional localhost `/metrics` `/health` `/ready` + alert hooks (log + callback). PAPER default. No LIVE. |
 | 37–42 Security / tests / clock / resolution | Hygiene tests + parser |
 | 43–47 Watchlist / filter / micro / audit | Implemented |
 | 48–51 Skills / watch routine | Scripts; no auto prod change |

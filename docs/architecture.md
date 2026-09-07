@@ -24,7 +24,7 @@ unreachable unless every acceptance gate passes.
      │                └──────────────┴───────────────┴───────┐       │
      │                                                       ▼       ▼
      │                                              SQLite/Parquet +
-     │                                              signal audit JSON
+     │                                              JSON logs / Prometheus
      └──────────── marketdata freshness / WS heartbeats ─────────────┘
 ```
 
@@ -135,6 +135,7 @@ PnL velocity, regime labels, Parte 46 signal-quality JSON.
 - Market / user / RTDS reconnect + heartbeat  
 - TWAP-aware crypto paper FV + public RTDS print cache (official 30s/60s only)  
 - Esports skip-heavy parser + Gamma fixtures (no invented live model)  
-- Prometheus metrics + JSON logs  
+- Prometheus metrics + redacted JSON logs + `/metrics` `/health` `/ready`
+  (localhost, default-off) + alert callbacks (kill, drawdown, stale WS, …)  
 - Offline tuner suggestions (`hotflow tune`; never auto-applies)  
 - Strategy experiment tracking fields

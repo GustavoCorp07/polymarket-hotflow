@@ -31,6 +31,7 @@ from hotflow.features.snapshot import build_feature_snapshot
 from hotflow.hotmarket.opportunity import score_opportunity
 from hotflow.hotmarket.score import score_hot_market
 from hotflow.hotmarket.watchlist import resource_plan
+from hotflow.marketdata.clock import monotonic_ms
 from hotflow.marketdata.freshness import FeedClock
 from hotflow.marketdata.rtds_twap import FixtureTwapSource, TwapObservationSource
 from hotflow.marketdata.sports_cache import SportsGameCache, game_state_status
@@ -45,6 +46,7 @@ from hotflow.marketdata.weather_fixtures import (
     WeatherForecastSource,
     labeled_gamma_weather_forecasts,
 )
+from hotflow.monitoring.observer import Observability
 from hotflow.portfolio.sizing import size_notional
 from hotflow.reason_codes import ReasonCode
 from hotflow.risk.engine import RiskEngine
@@ -147,9 +149,11 @@ class PaperPipeline:
         sports_source: SportsStateSource | None = None,
         sports_cache_path: str | Path | None = None,
         esports_source: FixtureEsportsSource | None = None,
+        obs: Observability | None = None,
     ) -> None:
         self.config = config
-        self.kills = KillSwitchBoard()
+        self.obs = obs or Observability.from_config(config, announce_restart=False)
+        self.kills = KillSwitchBoard(on_trip=self.obs.on_kill_event)
         self.risk = RiskEngine(config.risk, self.kills)
         self.broker = PaperBroker(config.trading)
         self.fair = CryptoFairValue()
@@ -191,6 +195,31 @@ class PaperPipeline:
         self.broker.cancel_open()
 
     def evaluate_market(
+        self,
+        market: MarketRecord,
+        *,
+        latency_ms: float = 50.0,
+        p_info: float | None = None,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        started = monotonic_ms()
+        result = self._evaluate_market(market, latency_ms=latency_ms, p_info=p_info, now=now)
+        category = infer_category(market.tags, market.category)
+        peak = self.risk.state.peak_equity
+        drawdown = ((peak - self.risk.state.equity) / peak) if peak > 0 else 0.0
+        self.obs.after_evaluate(
+            result,
+            latency_ms=monotonic_ms() - started,
+            market_id=market.market_id,
+            category=category,
+            session_id=self.config.trading.session_id,
+            kill_switch=self.kills.tripped,
+            exposure=self.risk.state.total_exposure,
+            drawdown=drawdown,
+        )
+        return result
+
+    def _evaluate_market(
         self,
         market: MarketRecord,
         *,
@@ -653,10 +682,12 @@ class PaperPipeline:
             self._audit(market_id=market.market_id, accepted=False, reason=ReasonCode.LIVE_GATES_BLOCKED)
             return {"accepted": False, "reason": ReasonCode.LIVE_GATES_BLOCKED}
 
+        order_started = monotonic_ms()
         order = self.broker.create(opp, price=edge.market_price, size=shares)
         order = self.broker.submit(order.client_order_id)
         filled_before = order.filled_size
         order = self.broker.simulate_fill(order.client_order_id)
+        self.obs.observe_order_latency(monotonic_ms() - order_started)
         self.risk.state.open_orders = sum(
             1
             for o in self.broker.orders.values()
@@ -755,8 +786,10 @@ class PaperPipeline:
             try:
                 markets = await scanner.scan(use_network=use_network)
             except Exception as exc:  # noqa: BLE001
+                self.obs.note_api_error("scanner", type(exc).__name__)
                 return {"ok": False, "error": type(exc).__name__, "markets": 0, "audits": []}
         results = [self.evaluate_market(m) for m in markets]
+        self.obs.snapshot_pipeline(self)
         return {
             "ok": True,
             "mode": self.config.trading.mode,

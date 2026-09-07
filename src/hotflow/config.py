@@ -310,6 +310,11 @@ class StorageConfig(BaseModel):
 class MonitoringConfig(BaseModel):
     prometheus_port: int = 9108
     json_logs: bool = True
+    http_enabled: bool = False
+    http_bind: str = "127.0.0.1"
+    alert_drawdown: float = 0.08
+    alert_latency_ms: float = 800.0
+    alert_slippage: float = 0.02
 
 
 class HotflowConfig(BaseModel):

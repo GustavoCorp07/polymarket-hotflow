@@ -17,7 +17,7 @@ hotflow backtest --fixture tests/fixtures/backtest/crypto_longer_synthetic.json
 hotflow record-stream --mock
 hotflow tune --report reports/backtest-*.json --write-suggestion reports/tune-suggestion.yaml
 hotflow shadow --mock
-pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py tests/test_weather_gamma_fixtures.py tests/test_esports.py tests/test_sports_cache.py tests/test_backtest.py tests/test_recorder.py tests/test_tuner.py
+pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py tests/test_weather_gamma_fixtures.py tests/test_esports.py tests/test_sports_cache.py tests/test_backtest.py tests/test_recorder.py tests/test_tuner.py tests/test_observability.py
 pytest -q
 ```
 
@@ -103,6 +103,37 @@ python scripts/hotflow_daily_review.py
 python scripts/hotflow_experiment.py
 python scripts/hotflow_incident.py
 ```
+
+## Metrics and alerts (Parte 35–36)
+
+Optional localhost scrape. Default bind is `127.0.0.1` (not a Polymarket
+endpoint). `trading.mode` stays **paper**. The HTTP server is **off** unless
+`--serve-metrics`, `monitoring.http_enabled: true`, or `HOTFLOW_METRICS=1`.
+
+```bash
+hotflow serve-metrics                  # /metrics /health /ready on :9108
+hotflow paper-run --mock --serve-metrics
+curl -sS http://127.0.0.1:9108/health
+curl -sS http://127.0.0.1:9108/ready
+curl -sS http://127.0.0.1:9108/metrics | head
+```
+
+Prometheus can scrape `http://127.0.0.1:9108/metrics`. Histogram series
+`hotflow_signal_latency_seconds` and `hotflow_order_latency_seconds` support
+`histogram_quantile(0.5|0.9|0.99, …)` for p50/p90/p99. Equity / PnL gauges
+are **placeholders** from paper cash and risk-state PnL — not venue balances.
+
+Alert hooks emit a redacted JSON `alert` event and an optional callback
+(`Observability.add_alert_callback`). Kinds: kill switch, drawdown, stale WS,
+high latency, auth failure, position mismatch, process restart, unexpected
+exposure, API disconnected, high slippage, strategy disabled. Callbacks must
+not block the decide path. **Never put API keys, private keys, or wallet
+material in alerts.**
+
+`/ready` is 503 when the kill switch is tripped or `trading.mode` is `live`.
+`/health` stays 200 while the process is up.
+
+Grafana: see `dashboards/README.md` (scrape notes only; no shipped dashboard).
 
 ## Kill switch recovery
 

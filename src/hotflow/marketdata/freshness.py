@@ -73,3 +73,6 @@ class FeedClock:
             return True
         except StaleDataError:
             return False
+
+    def samples(self) -> dict[str, FeedSample]:
+        return dict(self._samples)

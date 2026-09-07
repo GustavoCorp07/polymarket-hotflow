@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from hotflow.config import HotflowConfig
+from hotflow.monitoring.observer import Observability
 from hotflow.pipeline import PaperPipeline
 from hotflow.reason_codes import ReasonCode
 from hotflow.types import MarketRecord, Side
@@ -49,13 +50,17 @@ def run_shadow(
     next_prices: dict[str, float] | None = None,
     p_info: float | None = None,
     pipeline: PaperPipeline | None = None,
+    obs: Observability | None = None,
 ) -> list[dict[str, Any]]:
     config.trading.mode = "shadow"
     config.trading.shadow = True
-    pipe = pipeline or PaperPipeline(config, use_twap_fixtures=True)
+    watcher = obs or (pipeline.obs if pipeline is not None else Observability.from_config(config))
+    pipe = pipeline or PaperPipeline(config, use_twap_fixtures=True, obs=watcher)
     rows: list[dict[str, Any]] = []
     prices = next_prices or {}
     for market in markets:
         result = pipe.evaluate_market(market, p_info=p_info)
         rows.append(attach_shadow_fields(result, next_price=prices.get(market.market_id)))
+    watcher.observe_shadow(rows)
+    watcher.snapshot_pipeline(pipe)
     return rows

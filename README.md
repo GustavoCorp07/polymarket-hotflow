@@ -52,6 +52,11 @@ hotflow backtest --fixture tests/fixtures/backtest/crypto_longer_synthetic.json
 hotflow record-stream --mock
 hotflow tune --report reports/backtest-*.json --write-suggestion reports/tune-suggestion.yaml
 hotflow shadow --mock
+
+# Optional localhost observability (PAPER only; off by default)
+hotflow serve-metrics
+hotflow paper-run --mock --serve-metrics
+# scrape http://127.0.0.1:9108/metrics  /health  /ready
 ```
 
 Reports land in `reports/`. SQLite state lands in `data/hotflow.sqlite`.
@@ -115,7 +120,8 @@ can be scored without inventing map/economy math. Official RTDS 30s/60s TWAP pap
 by default; optional unauthenticated live client off). WS reconnect/heartbeat,
 event-driven backtester (`hotflow backtest --fixture`), shadow
 `would_buy` / `would_sell` logs, Prometheus + JSON logs, and the offline
-tuner stay in PAPER/BACKTEST/SHADOW (no LIVE).
+tuner stay in PAPER/BACKTEST/SHADOW (no LIVE). JSON logs redact secrets.
+Prometheus + `/health` `/ready` are localhost-only and default-off.
 
 ## TWAP paper path
 

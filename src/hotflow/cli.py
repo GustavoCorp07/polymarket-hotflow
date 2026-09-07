@@ -11,6 +11,7 @@ import typer
 
 from hotflow.config import load_config
 from hotflow.execution.live_gate import live_gates_open
+from hotflow.monitoring.observer import Observability, http_enabled
 from hotflow.marketdata.sports_cache import SportsGameCache
 from hotflow.marketdata.sports_fixtures import default_sports_cache_fixtures
 from hotflow.marketdata.twap_cache import TwapPrintCache
@@ -53,6 +54,16 @@ def _prepare_mock_config(cfg):
     return cfg
 
 
+def _observability(cfg, *, serve: bool) -> Observability:
+    obs = Observability.from_config(cfg, announce_restart=True)
+    if serve or http_enabled(cfg):
+        obs.start_http()
+        addr = obs.http_addr
+        if addr is not None:
+            typer.echo(f"metrics http://{addr[0]}:{addr[1]}/metrics health=/health ready=/ready")
+    return obs
+
+
 @app.command()
 def scan(
     config: Path | None = typer.Option(None, "--config", "-c"),
@@ -68,18 +79,21 @@ def scan(
         False, "--sports-live", help="Attach public Sports WS subscriber briefly (PAPER only)"
     ),
     out: Path | None = typer.Option(None, "--out"),
+    serve_metrics: bool = typer.Option(False, "--serve-metrics", help="Bind localhost /metrics /health /ready"),
 ) -> None:
     """Scan Gamma + public CLOB and write a report. Never places live orders."""
     cfg = load_config(config)
     if mock:
         cfg = _prepare_mock_config(cfg)
     store = _store(cfg)
+    obs = _observability(cfg, serve=serve_metrics)
     pipe = PaperPipeline(
         cfg,
         store,
         use_twap_fixtures=mock,
         cache_path=twap_cache,
         sports_cache_path=sports_cache,
+        obs=obs,
     )
 
     async def _run() -> dict:
@@ -127,6 +141,7 @@ def paper_run(
         False, "--sports-live", help="Attach public Sports WS subscriber briefly (PAPER only)"
     ),
     out: Path | None = typer.Option(None, "--out"),
+    serve_metrics: bool = typer.Option(False, "--serve-metrics", help="Bind localhost /metrics /health /ready"),
 ) -> None:
     """One or more paper cycles. Default mode is paper. LIVE is not started here."""
     cfg = load_config(config)
@@ -135,6 +150,7 @@ def paper_run(
     if mock:
         cfg = _prepare_mock_config(cfg)
     store = _store(cfg)
+    obs = _observability(cfg, serve=serve_metrics)
     summaries: list[dict[str, Any]] = []
     for _cycle in range(max(1, cycles)):
         pipe = PaperPipeline(
@@ -143,6 +159,7 @@ def paper_run(
             use_twap_fixtures=mock,
             cache_path=twap_cache,
             sports_cache_path=sports_cache,
+            obs=obs,
         )
         if mock:
             results = [
@@ -152,6 +169,7 @@ def paper_run(
                 *[pipe.evaluate_market(item) for item in gamma_weather_demo_markets(hot=True)],
                 *[pipe.evaluate_market(item) for item in gamma_esports_demo_markets(hot=True)],
             ]
+            obs.snapshot_pipeline(pipe)
             summaries.append(
                 {
                     "ok": True,
@@ -310,7 +328,8 @@ def backtest(
     if cfg.trading.mode.lower() == "live":
         raise typer.BadParameter("backtest refuses LIVE mode")
     cfg.trading.mode = "backtest"
-    report = EventDrivenBacktester(cfg).run_fixture(fixture)
+    obs = Observability.from_config(cfg, announce_restart=False)
+    report = EventDrivenBacktester(cfg, obs=obs).run_fixture(fixture)
     target = out or Path(cfg.storage.reports_dir) / (
         f"backtest-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}.json"
     )
@@ -336,13 +355,14 @@ def shadow(
         raise typer.BadParameter("shadow refuses LIVE mode")
     cfg.trading.mode = "shadow"
     cfg.trading.shadow = True
+    obs = Observability.from_config(cfg, announce_restart=False)
     if mock:
         markets = [
             demo_twap_market(hot=True),
             demo_weather_market(hot=True),
             demo_sports_nba_market(hot=True),
         ]
-        rows = run_shadow(cfg, markets)
+        rows = run_shadow(cfg, markets, obs=obs)
     else:
         raise typer.BadParameter("shadow --mock is the supported path in this pass")
     payload = {"mode": "shadow", "sent_orders": False, "results": rows}
@@ -441,6 +461,29 @@ def tune(
         f"tune refused={payload.refused} suggested={len(payload.suggested)} "
         f"applied=false report={target}"
     )
+
+
+@app.command("serve-metrics")
+def serve_metrics_cmd(
+    config: Path | None = typer.Option(None, "--config", "-c"),
+    bind: str | None = typer.Option(None, "--bind", help="Default 127.0.0.1"),
+    port: int | None = typer.Option(None, "--port", help="Default monitoring.prometheus_port"),
+) -> None:
+    """Optional localhost scrape: /metrics /health /ready. PAPER only. No orders."""
+    import time
+
+    cfg = load_config(config)
+    if cfg.trading.mode.lower() == "live":
+        raise typer.BadParameter("serve-metrics refuses LIVE mode")
+    obs = Observability.from_config(cfg, announce_restart=True)
+    server = obs.start_http(bind=bind, port=port)
+    host, listen = server.server_address[:2]
+    typer.echo(f"serving http://{host}:{listen}/metrics /health /ready mode={cfg.trading.mode}")
+    try:
+        while True:
+            time.sleep(3600)
+    except KeyboardInterrupt:
+        obs.stop_http()
 
 
 @app.command()
