@@ -720,7 +720,8 @@ def weather_market_from_gamma_fixture(row: dict[str, Any], *, hot: bool = True) 
     market.tags = list(row.get("tags") or ["weather"])
     market.question = str(row.get("question") or "")
     if row.get("outcomes"):
-        market.outcomes = [str(item) for item in row["outcomes"]] if isinstance(row["outcomes"], list) else market.outcomes
+        if isinstance(row["outcomes"], list):
+            market.outcomes = [str(item) for item in row["outcomes"]]
     raw = {
         "description": row.get("description"),
         "resolutionSource": row.get("resolutionSource"),
