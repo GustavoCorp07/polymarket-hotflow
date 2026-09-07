@@ -34,3 +34,16 @@ def default_weather_forecast() -> WeatherForecast:
         ensemble_spread=3.0,
         source="fixture",
     )
+
+
+def labeled_gamma_weather_forecasts() -> dict[str, WeatherForecast]:
+    """Synthetic forecast features for Gamma-text demos. Not live NWS/KMA/NOAA."""
+    return {
+        "chicago": default_weather_forecast(),
+        "default": default_weather_forecast(),
+        "jinan": WeatherForecast(mean=12.0, std=2.0, p_yes=0.88, source="fixture"),
+        "zsjn": WeatherForecast(mean=12.0, std=2.0, p_yes=0.88, source="fixture"),
+        "london": WeatherForecast(mean=10.0, std=1.5, p_yes=0.86, source="fixture"),
+        "eglc": WeatherForecast(mean=10.0, std=1.5, p_yes=0.86, source="fixture"),
+        "seoul": WeatherForecast(mean=40.0, std=12.0, p_yes=0.84, source="fixture"),
+    }

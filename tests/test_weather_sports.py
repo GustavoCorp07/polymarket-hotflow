@@ -276,7 +276,7 @@ def test_cli_paper_run_mock_weather_and_sports(tmp_path) -> None:
     assert completed.exit_code == 0, completed.output
     payload = json.loads(out.read_text(encoding="utf-8"))
     results = payload["cycles"][0]["results"]
-    assert len(results) == 3
+    assert len(results) >= 3
     assert results[0]["accepted"] is True
     assert results[0]["twap"]["window_seconds"] in {30, 60}
     assert results[1]["accepted"] is True

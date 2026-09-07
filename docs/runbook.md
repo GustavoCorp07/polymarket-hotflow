@@ -4,15 +4,22 @@
 
 ```bash
 pip install -e ".[dev]"
-hotflow paper-run --mock    # TWAP + weather + NBA sports fixtures, PAPER only
+hotflow paper-run --mock    # TWAP + Chicago + Gamma weather texts + NBA, PAPER only
+hotflow weather-fixtures    # public Gamma weather-tag text → tests/fixtures/weather/
 hotflow rtds-cache --mock   # write official-shape cache (no socket)
 hotflow paper-run --twap-cache data/rtds_twap_cache.json --mock
 hotflow sports-cache --mock # write official-shape Sports WS cache (no socket)
 hotflow paper-run --sports-cache data/sports_ws_cache.json --mock
 hotflow scan
-pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py tests/test_sports_cache.py
+pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py tests/test_weather_gamma_fixtures.py tests/test_sports_cache.py
 pytest -q
 ```
+
+Weather fixtures are **public Gamma market text** (`GET /events?tag_slug=weather`
+plus `GET /markets/{id}`). They do not include forecasts. `paper-run --mock`
+attaches labeled `source=fixture` forecasts for scoring demos only — not live
+NWS. Unparseable rules (e.g. hottest-year rank markets) skip
+`WEATHER_RULES_UNKNOWN`.
 
 `weather.enabled` / `sports.enabled` default on for paper scoring. They never
 open paid weather APIs. `feeds.sports_ws.subscriber_enabled` and

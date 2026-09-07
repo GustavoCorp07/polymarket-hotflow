@@ -234,7 +234,7 @@ def test_cli_sports_cache_mock(tmp_path: Path) -> None:
     )
     assert completed.exit_code == 0, completed.output
     report = json.loads(paper.read_text(encoding="utf-8"))
-    assert report["cycles"][0]["accepted"] == 3
+    assert report["cycles"][0]["accepted"] >= 3
     sports = report["cycles"][0]["results"][2]
     assert sports["accepted"] is True
     assert sports["sports_model"] == "basketball"

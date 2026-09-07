@@ -1,0 +1,17 @@
+{
+  "id": "4238333",
+  "conditionId": "0x93ff2242b33d7def9c6e52e88b2b1faec90268a6be0ac457c01144db08fd59fd",
+  "slug": "lowest-temperature-in-london-on-september-7-2026-13corbelow",
+  "question": "Will the lowest temperature in London be 13°C or below on September 7?",
+  "description": "This market will resolve to the temperature range that contains the lowest temperature recorded by NOAA at the London City Airport Station in degrees Celsius on 7 Sep '26.\n\nThe resolution source for this market will be information from NOAA, specifically the lowest reading under the \"Temp\" column for all times on this day, available here: https://www.weather.gov/wrh/timeseries?site=eglc\n\nIf NOAA data for the observation date is unavailable by 11:59 PM ET on the day following the observation date, the Weather Underground Daily Observations table will be used as the resolution source.\n\nIn the event that there is no data for the observation date by 11:59 PM ET on the day following the observation date, this market will resolve to the lowest bracket.\n\nTo toggle between Fahrenheit and Celsius, click the \"Switch to Metric Units\" button until the relevant table displays °C.\n\nThis market will resolve once the first data point for the following date has been published on the resolution source, or by 11:59 PM ET on the day following the observation date, whichever comes first.\n\nThe resolution source for this market measures temperatures to whole degrees Celsius (eg, 9°C). Thus, this is the level of precision that will be used when resolving the market.\n\nRevisions to temperatures recorded within this market's timeframe will be considered until the first datapoint for the following date has been published, after which any alterations will not be considered.",
+  "resolutionSource": "https://www.weather.gov/wrh/timeseries?site=eglc",
+  "endDate": "2026-09-07T12:00:00Z",
+  "closed": false,
+  "active": true,
+  "groupItemTitle": "13°C or below",
+  "outcomes": [
+    "Yes",
+    "No"
+  ],
+  "collected_from": "gamma GET /markets/4238333"
+}

@@ -31,8 +31,13 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 
 # Documented fixture path (no network required). Exercises official-shape
-# RTDS 30s/60s TWAP plus weather + NBA sports fixtures on PAPER only.
+# RTDS 30s/60s TWAP, Chicago + real Gamma weather texts, and NBA sports
+# fixtures on PAPER only. Weather forecasts in --mock are labeled fixtures.
 hotflow paper-run --mock
+
+# Refresh public Gamma weather-tag resolution text (no forecasts, no orders)
+hotflow weather-fixtures
+# or: python scripts/fetch_weather_gamma_fixtures.py --out tests/fixtures/weather
 
 # Public Gamma + CLOB scan (read-only)
 hotflow scan

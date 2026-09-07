@@ -1,0 +1,82 @@
+{
+  "source": "gamma_public",
+  "tag_slug": "weather",
+  "endpoint": "GET https://gamma-api.polymarket.com/events?tag_slug=weather",
+  "preferred_market_endpoint": "GET https://gamma-api.polymarket.com/markets/{id}",
+  "collected_at": "2026-09-07T18:31:00.322869+00:00",
+  "query": {
+    "endpoint": "https://gamma-api.polymarket.com/events",
+    "params": {
+      "tag_slug": "weather",
+      "closed": "false|true"
+    }
+  },
+  "note": "Public Gamma weather-tag market text only. No secrets, token ids, or fees. Forecasts are not included. Resolution rules are copied, not invented. Forecasts used later in paper FV are labeled source=fixture — not live NWS/KMA/NOAA.",
+  "markets": [
+    {
+      "id": "2290078",
+      "slug": "highest-temperature-in-jinan-on-may-20-2026-15corbelow",
+      "question": "Will the highest temperature in Jinan be 15°C or below on May 20?",
+      "description": "This market will resolve to the temperature range that contains the highest temperature recorded at the Jinan Yaoqiang International Airport Station in degrees Celsius on 20 May '26.\n\nThe resolution source for this market will be information from Wunderground, specifically the highest temperature recorded for all times on this day by the Forecast for the Jinan Yaoqiang International Airport Station once information is finalized, available here: https://www.wunderground.com/history/daily/cn/jinan/ZSJN.\n\nTo toggle between Fahrenheit and Celsius, click the gear icon next to the search bar and switch the Temperature setting between °F and °C.\n\nThis market can not resolve to \"Yes\" until all data for this date has been finalized.\n\nThe resolution source for this market measures temperatures to whole degrees Celsius (eg, 9°C). Thus, this is the level of precision that will be used when resolving the market.\n\nAny revisions to temperatures recorded after data is finalized for this market's timeframe will not be considered for this market's resolution.",
+      "resolutionSource": "https://www.wunderground.com/history/daily/cn/jinan/ZSJN",
+      "endDate": "2026-05-20T12:00:00Z",
+      "closed": false,
+      "active": true,
+      "groupItemTitle": "15°C or below",
+      "outcomes": [
+        "Yes",
+        "No"
+      ],
+      "collected_from": "gamma GET /markets/2290078"
+    },
+    {
+      "id": "4238333",
+      "conditionId": "0x93ff2242b33d7def9c6e52e88b2b1faec90268a6be0ac457c01144db08fd59fd",
+      "slug": "lowest-temperature-in-london-on-september-7-2026-13corbelow",
+      "question": "Will the lowest temperature in London be 13°C or below on September 7?",
+      "description": "This market will resolve to the temperature range that contains the lowest temperature recorded by NOAA at the London City Airport Station in degrees Celsius on 7 Sep '26.\n\nThe resolution source for this market will be information from NOAA, specifically the lowest reading under the \"Temp\" column for all times on this day, available here: https://www.weather.gov/wrh/timeseries?site=eglc\n\nIf NOAA data for the observation date is unavailable by 11:59 PM ET on the day following the observation date, the Weather Underground Daily Observations table will be used as the resolution source.\n\nIn the event that there is no data for the observation date by 11:59 PM ET on the day following the observation date, this market will resolve to the lowest bracket.\n\nTo toggle between Fahrenheit and Celsius, click the \"Switch to Metric Units\" button until the relevant table displays °C.\n\nThis market will resolve once the first data point for the following date has been published on the resolution source, or by 11:59 PM ET on the day following the observation date, whichever comes first.\n\nThe resolution source for this market measures temperatures to whole degrees Celsius (eg, 9°C). Thus, this is the level of precision that will be used when resolving the market.\n\nRevisions to temperatures recorded within this market's timeframe will be considered until the first datapoint for the following date has been published, after which any alterations will not be considered.",
+      "resolutionSource": "https://www.weather.gov/wrh/timeseries?site=eglc",
+      "endDate": "2026-09-07T12:00:00Z",
+      "closed": false,
+      "active": true,
+      "groupItemTitle": "13°C or below",
+      "outcomes": [
+        "Yes",
+        "No"
+      ],
+      "collected_from": "gamma GET /markets/4238333"
+    },
+    {
+      "id": "4027989",
+      "conditionId": "0xfa86eb71dd544262ca6b015cf54bb3058684698af552fe28c4e328a694d5adc1",
+      "slug": "will-seoul-have-less-than-75mm-of-precipitation-in-september",
+      "question": "Will Seoul have less than 75mm of precipitation in September?",
+      "description": "This market will resolve according to the total precipitation in mm in Seoul in September, 2026, according to the Korea Meteorological Administration's information for the region/branch of \"Seoul\".\n\nIf the reported value falls exactly between two brackets, then this market will resolve to the higher range bracket.\n\nThe resolution source for this market will be the Korea Meteorological Administration, specifically the figure for monthly precipitation in mm when the classification is set for \"ground\", the region/branch is set for \"Seoul\", the element is set for \"precipitation\", and the period is set for the month of September at the https://data.kma.go.kr/climate/RankState/selectRankStatisticsDivisionList.do link once the figure is finalized for the whole month of September 2026.\n\nIf the relevant data is not available by December 7, 2026, 11:59 PM ET, another credible resolution source will be chosen.\n\nThe resolution source for this market measures precipitation to 1 decimal place (e.g., 1.5), thus, this is the level of precision that will be used when resolving this market. Any revisions to precipitation recorded after data is finalized for this market's timeframe will not be considered for this market's resolution.",
+      "endDate": "2026-09-30T23:59:00Z",
+      "closed": false,
+      "active": true,
+      "groupItemTitle": "<75mm",
+      "outcomes": [
+        "Yes",
+        "No"
+      ],
+      "collected_from": "gamma GET /markets/4027989"
+    },
+    {
+      "id": "678686",
+      "conditionId": "0xe67f4d31f0eba1b009b49d7a7739b2a5f53a2d7d979a0902b465a510492c33bb",
+      "slug": "will-2026-be-the-hottest-year-on-record",
+      "question": "Will 2026 be the hottest year on record?",
+      "description": "This market will resolve according to the numerical rank of how hot 2026 is when compared against all other years for which the Global Land-Ocean Temperature Index has data.\n\nYears will be ranked in descending order, starting with the hottest as number 1, the second hottest as number 2, etc.\n\nIf 2026 ties with any other year, it will resolve according to the place the year it ties with occupies.\n\nThis market will resolve immediately once the specified data becomes available, regardless of whether the figure for the relevant years is later revised.\n\nThe primary resolution source for this market will be the figure found in the table titled \"Land-Ocean Temperature Index (C)\" under the column \"No_Smoothing\" in the row \"2026\" (https://data.giss.nasa.gov/gistemp/graphs/graph_data/Global_Mean_Estimates_based_on_Land_and_Ocean_Data/graph.txt). If NASA's \"Global Temperature Index\" is rendered permanently unavailable, other information from NASA may be used. If no information for 2026 is provided by NASA by March 1, 2027, 11:59 PM ET, this market will resolve based on a consensus of credible reporting.",
+      "endDate": "2026-12-31T00:00:00Z",
+      "closed": false,
+      "active": true,
+      "groupItemTitle": "1",
+      "outcomes": [
+        "Yes",
+        "No"
+      ],
+      "collected_from": "gamma GET /markets/678686"
+    }
+  ]
+}

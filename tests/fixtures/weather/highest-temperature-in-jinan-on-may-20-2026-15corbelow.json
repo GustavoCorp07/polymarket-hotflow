@@ -1,0 +1,16 @@
+{
+  "id": "2290078",
+  "slug": "highest-temperature-in-jinan-on-may-20-2026-15corbelow",
+  "question": "Will the highest temperature in Jinan be 15°C or below on May 20?",
+  "description": "This market will resolve to the temperature range that contains the highest temperature recorded at the Jinan Yaoqiang International Airport Station in degrees Celsius on 20 May '26.\n\nThe resolution source for this market will be information from Wunderground, specifically the highest temperature recorded for all times on this day by the Forecast for the Jinan Yaoqiang International Airport Station once information is finalized, available here: https://www.wunderground.com/history/daily/cn/jinan/ZSJN.\n\nTo toggle between Fahrenheit and Celsius, click the gear icon next to the search bar and switch the Temperature setting between °F and °C.\n\nThis market can not resolve to \"Yes\" until all data for this date has been finalized.\n\nThe resolution source for this market measures temperatures to whole degrees Celsius (eg, 9°C). Thus, this is the level of precision that will be used when resolving the market.\n\nAny revisions to temperatures recorded after data is finalized for this market's timeframe will not be considered for this market's resolution.",
+  "resolutionSource": "https://www.wunderground.com/history/daily/cn/jinan/ZSJN",
+  "endDate": "2026-05-20T12:00:00Z",
+  "closed": false,
+  "active": true,
+  "groupItemTitle": "15°C or below",
+  "outcomes": [
+    "Yes",
+    "No"
+  ],
+  "collected_from": "gamma GET /markets/2290078"
+}

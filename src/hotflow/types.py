@@ -174,6 +174,7 @@ class WeatherResolutionSpec(BaseModel):
     timezone: str | None = None
     rounding_rule: str | None = None
     threshold: float | None = None
+    comparison: str | None = None
     source: str | None = None
     parse_confidence: float = 0.0
     complete: bool = False
@@ -188,6 +189,7 @@ class WeatherForecast(BaseModel):
     median: float | None = None
     std: float | None = None
     p_above_threshold: float | None = None
+    p_yes: float | None = None
     ensemble_spread: float | None = None
     source: str = "fixture"
     observed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

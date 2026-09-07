@@ -21,6 +21,7 @@ from hotflow.pipeline import (
     demo_sports_nba_market,
     demo_twap_market,
     demo_weather_market,
+    gamma_weather_demo_markets,
     write_report,
 )
 from hotflow.storage.sqlite_store import SqliteStore
@@ -86,6 +87,7 @@ def scan(
                 demo_twap_market(hot=True),
                 demo_weather_market(hot=True),
                 demo_sports_nba_market(hot=True),
+                *gamma_weather_demo_markets(hot=True),
                 demo_market(hot=False),
             ]
             markets[-1].market_id = "demo-cold"
@@ -145,6 +147,7 @@ def paper_run(
                 pipe.evaluate_market(demo_twap_market(hot=True)),
                 pipe.evaluate_market(demo_weather_market(hot=True)),
                 pipe.evaluate_market(demo_sports_nba_market(hot=True)),
+                *[pipe.evaluate_market(item) for item in gamma_weather_demo_markets(hot=True)],
             ]
             summaries.append(
                 {
@@ -238,6 +241,31 @@ def sports_cache_cmd(
     cache.save(target)
     typer.echo(
         f"sports-cache live accepted={prints} stored={len(cache.snapshot()['games'])} path={target}"
+    )
+
+
+@app.command("weather-fixtures")
+def weather_fixtures_cmd(
+    out: Path | None = typer.Option(None, "--out", help="Directory for redacted Gamma weather JSON"),
+    data_out: Path | None = typer.Option(
+        None, "--data-out", help="Optional gitignored copy (e.g. data/weather)"
+    ),
+    open_only: bool = typer.Option(False, "--open-only", help="Skip closed=true event pages"),
+) -> None:
+    """Pull public Gamma weather-tag market text. PAPER metadata only — no forecasts, no orders."""
+    from hotflow.discovery.weather_gamma import DEFAULT_FIXTURE_DIR, collect_weather_fixtures
+
+    dest = out or DEFAULT_FIXTURE_DIR
+    payload = asyncio.run(
+        collect_weather_fixtures(
+            directory=dest,
+            data_directory=data_out,
+            include_closed=not open_only,
+        )
+    )
+    typer.echo(
+        f"weather-fixtures scanned={payload.get('scanned')} saved={payload.get('saved')} "
+        f"path={payload.get('path')}"
     )
 
 

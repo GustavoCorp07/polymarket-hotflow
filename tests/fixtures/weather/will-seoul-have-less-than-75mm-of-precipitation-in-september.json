@@ -1,0 +1,16 @@
+{
+  "id": "4027989",
+  "conditionId": "0xfa86eb71dd544262ca6b015cf54bb3058684698af552fe28c4e328a694d5adc1",
+  "slug": "will-seoul-have-less-than-75mm-of-precipitation-in-september",
+  "question": "Will Seoul have less than 75mm of precipitation in September?",
+  "description": "This market will resolve according to the total precipitation in mm in Seoul in September, 2026, according to the Korea Meteorological Administration's information for the region/branch of \"Seoul\".\n\nIf the reported value falls exactly between two brackets, then this market will resolve to the higher range bracket.\n\nThe resolution source for this market will be the Korea Meteorological Administration, specifically the figure for monthly precipitation in mm when the classification is set for \"ground\", the region/branch is set for \"Seoul\", the element is set for \"precipitation\", and the period is set for the month of September at the https://data.kma.go.kr/climate/RankState/selectRankStatisticsDivisionList.do link once the figure is finalized for the whole month of September 2026.\n\nIf the relevant data is not available by December 7, 2026, 11:59 PM ET, another credible resolution source will be chosen.\n\nThe resolution source for this market measures precipitation to 1 decimal place (e.g., 1.5), thus, this is the level of precision that will be used when resolving this market. Any revisions to precipitation recorded after data is finalized for this market's timeframe will not be considered for this market's resolution.",
+  "endDate": "2026-09-30T23:59:00Z",
+  "closed": false,
+  "active": true,
+  "groupItemTitle": "<75mm",
+  "outcomes": [
+    "Yes",
+    "No"
+  ],
+  "collected_from": "gamma GET /markets/4027989"
+}

@@ -99,15 +99,25 @@ class GammaClient:
             params={"closed": str(closed).lower(), "limit": limit, "offset": offset},
         )
         response.raise_for_status()
-        payload = response.json()
-        if isinstance(payload, list):
-            return payload
-        if isinstance(payload, dict):
-            for key in ("data", "markets", "items"):
-                maybe = payload.get(key)
-                if isinstance(maybe, list):
-                    return maybe
-        raise ValueError("Unexpected Gamma /markets payload shape")
+        return _gamma_list(response.json(), "Unexpected Gamma /markets payload shape")
+
+    async def list_events(
+        self,
+        *,
+        closed: bool | None = False,
+        limit: int = 50,
+        offset: int = 0,
+        tag_slug: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Official GET /events. tag_slug is documented on list-events."""
+        params: dict[str, Any] = {"limit": limit, "offset": offset}
+        if closed is not None:
+            params["closed"] = str(closed).lower()
+        if tag_slug:
+            params["tag_slug"] = tag_slug
+        response = await self.client.get(GAMMA_EVENTS, params=params)
+        response.raise_for_status()
+        return _gamma_list(response.json(), "Unexpected Gamma /events payload shape")
 
     async def get_event(self, event_id: str) -> dict[str, Any]:
         response = await self.client.get(f"{GAMMA_EVENTS}/{event_id}")
@@ -116,6 +126,35 @@ class GammaClient:
         if not isinstance(data, dict):
             raise ValueError("Unexpected Gamma /events payload")
         return data
+
+    async def get_event_by_slug(self, slug: str) -> dict[str, Any]:
+        """Official GET /events/slug/{slug}."""
+        response = await self.client.get(f"{GAMMA_EVENTS}/slug/{slug}")
+        response.raise_for_status()
+        data = response.json()
+        if not isinstance(data, dict):
+            raise ValueError("Unexpected Gamma /events/slug payload")
+        return data
+
+    async def get_market(self, market_id: str) -> dict[str, Any]:
+        """Public GET /markets/{id} — same host and fields as list-markets."""
+        response = await self.client.get(f"{GAMMA_MARKETS}/{market_id}")
+        response.raise_for_status()
+        data = response.json()
+        if not isinstance(data, dict):
+            raise ValueError("Unexpected Gamma /markets/{id} payload")
+        return data
+
+
+def _gamma_list(payload: Any, error: str) -> list[dict[str, Any]]:
+    if isinstance(payload, list):
+        return payload
+    if isinstance(payload, dict):
+        for key in ("data", "markets", "items", "events"):
+            maybe = payload.get(key)
+            if isinstance(maybe, list):
+                return maybe
+    raise ValueError(error)
 
 
 # Re-export parsers for the scanner

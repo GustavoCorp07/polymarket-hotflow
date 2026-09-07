@@ -144,6 +144,7 @@ def _joined_resolution_text(market: MarketRecord) -> str:
         str(raw.get("description") or ""),
         str(raw.get("resolutionSource") or ""),
         str(raw.get("line") or ""),
+        str(raw.get("groupItemTitle") or ""),
         " ".join(market.tags),
         market.category or "",
     ]
@@ -210,18 +211,81 @@ def parse_twap_resolution(market: MarketRecord) -> TwapResolutionSpec:
     )
 
 
+_MONTH_NAMES = frozenset(
+    {
+        "january",
+        "february",
+        "march",
+        "april",
+        "may",
+        "june",
+        "july",
+        "august",
+        "september",
+        "october",
+        "november",
+        "december",
+    }
+)
+_CITY_SKIP = _MONTH_NAMES | {
+    "degrees",
+    "the",
+    "this",
+    "celsius",
+    "fahrenheit",
+    "noaa",
+    "wunderground",
+    "descending",
+    "ascending",
+}
 _CITY = re.compile(r"\bcity\s*[:=]\s*([A-Za-z][A-Za-z .'-]{1,40})", re.I)
-_IN_CITY = re.compile(r"\bin\s+([A-Z][A-Za-z .'-]{1,40}?)\b(?=\s|,|;|\.|$)", re.I)
-_STATION = re.compile(r"\b(?:station|icao)\s*[:=]?\s*(K[A-Z]{3}|[A-Z]{4})\b", re.I)
-_METAR = re.compile(r"\b(K[A-Z]{3})\b")
-_METRIC = re.compile(
-    r"\b(high temperature|low temperature|temperature|precip(?:itation)?|rainfall|snowfall)\b",
+_IN_CITY = re.compile(r"\bin\s+([A-Z][A-Za-z .'-]{1,40}?)\b(?=\s|,|;|\.|$)")
+_CITY_FROM_Q = re.compile(
+    r"\b(?:highest|lowest|high|low)\s+temperature\s+in\s+([A-Z][A-Za-z .'-]{1,40}?)"
+    r"(?:\s+be|\s+on|\s*\?|$)",
     re.I,
 )
-_UNIT = re.compile(r"\b(°F|°C|fahrenheit|celsius|inches|mm)\b", re.I)
+_CITY_HAVE = re.compile(
+    r"\bWill\s+([A-Z][A-Za-z .'-]{1,40}?)\s+have\s+(?:less|more|under|over)\b",
+)
+_STATION_NAME = re.compile(r"\bat the\s+([^.\n]{3,80}?\s+Station)\b", re.I)
+_STATION = re.compile(r"\b(?:station|icao)\s*[:=]?\s*(K[A-Z]{3}|[A-Z]{4})\b", re.I)
+_METAR = re.compile(r"\b(K[A-Z]{3})\b")
+_ICAO_SITE = re.compile(r"[?&]site=([A-Za-z]{4})\b")
+_ICAO_PATH = re.compile(r"wunderground\.com/history/daily/[^/\s]+/[^/\s]+/([A-Z]{4})\b")
+_METRIC = re.compile(
+    r"\b(highest temperature|lowest temperature|high temperature|low temperature|"
+    r"temperature|precip(?:itation)?|rainfall|snowfall)\b",
+    re.I,
+)
+_UNIT = re.compile(
+    r"\b(°F|°C|degrees\s+Celsius|degrees\s+Fahrenheit|fahrenheit|celsius|inches|inch|mm)\b",
+    re.I,
+)
 _TZ = re.compile(r"\b(UTC|America/[A-Za-z_]+|Europe/[A-Za-z_]+|Asia/[A-Za-z_]+)\b")
-_ROUND = re.compile(r"\bround(?:ed|ing)?\s+(?:to\s+)?(?:the\s+)?nearest(?:\s+whole)?(?:\s+degree)?\b", re.I)
-_WINDOW = re.compile(r"\b(calendar day|daily high|local (?:calendar )?day|24[\s-]*hour)\b", re.I)
+_ROUND_NEAREST = re.compile(
+    r"\bround(?:ed|ing)?\s+(?:to\s+)?(?:the\s+)?nearest(?:\s+whole)?(?:\s+degree)?\b",
+    re.I,
+)
+_ROUND_WHOLE = re.compile(r"\bwhole degrees?\b", re.I)
+_ROUND_DEC = re.compile(r"\b(\d)\s+decimal places?\b", re.I)
+_WINDOW = re.compile(
+    r"\b(all times on this day|on this day|calendar day|daily high|"
+    r"local (?:calendar )?day|24[\s-]*hour|"
+    r"(?:the\s+)?month of [A-Za-z]+(?:\s+20\d{2})?|"
+    r"in (?:January|February|March|April|May|June|July|August|September|October|November|December)"
+    r"(?:,?\s+20\d{2})?|"
+    r"between [A-Z][a-z]+ \d+ and [A-Z][a-z]+ \d+)\b",
+    re.I,
+)
+_SOURCE_SENTENCE = re.compile(
+    r"The resolution source for this market will be ([^.\n]{3,200})",
+    re.I,
+)
+_THRESH_OR_BELOW = re.compile(r"(\d+(?:\.\d+)?)\s*°\s*[CF]\s+or below", re.I)
+_THRESH_LESS = re.compile(r"(?:less than|<)\s*(\d+(?:\.\d+)?)\s*(?:mm|inches|inch|\")?", re.I)
+_THRESH_ABOVE = re.compile(r"(?:above|over)\s+(\d+(?:\.\d+)?)\s*(?:°\s*[FC])?", re.I)
+_THRESH_EXACT_C = re.compile(r"\bbe\s+(\d+(?:\.\d+)?)\s*°\s*[CF]\b", re.I)
 _VS = re.compile(r"\b(.+?)\s+(?:vs\.?|versus|@)\s+(.+?)(?:\s+on\b|\s*$)", re.I)
 
 
@@ -237,34 +301,100 @@ def _opt_bool(value: Any) -> bool | None:
     return None
 
 
+def _weather_source(market: MarketRecord, text: str) -> str | None:
+    raw = market.raw_gamma or {}
+    source = market.resolution.source or raw.get("resolutionSource")
+    if source:
+        source = str(source).strip()
+        if source:
+            return source
+    sentence = _SOURCE_SENTENCE.search(text)
+    if sentence:
+        value = sentence.group(1).strip()
+        if value and "another credible" not in value.lower():
+            return value
+    return None
+
+
+def _weather_city(text: str) -> str | None:
+    for pat in (_CITY, _CITY_FROM_Q, _CITY_HAVE, _IN_CITY):
+        match = pat.search(text)
+        if not match:
+            continue
+        city = match.group(1).strip(" .")
+        if city.lower() in _CITY_SKIP:
+            continue
+        return city
+    return None
+
+
+def _weather_station(text: str) -> str | None:
+    named = _STATION_NAME.search(text)
+    icao = _ICAO_SITE.search(text) or _ICAO_PATH.search(text) or _STATION.search(text) or _METAR.search(text)
+    if icao:
+        return icao.group(1).upper()
+    if named:
+        return named.group(1).strip()
+    return None
+
+
+def _weather_rounding(text: str) -> str | None:
+    if _ROUND_NEAREST.search(text) or _ROUND_WHOLE.search(text):
+        return "nearest_degree"
+    dec = _ROUND_DEC.search(text)
+    if dec:
+        return f"{dec.group(1)}_decimal"
+    return None
+
+
+def _weather_threshold(
+    market: MarketRecord, text: str
+) -> tuple[float | None, str | None]:
+    below = _THRESH_OR_BELOW.search(text)
+    if below:
+        return float(below.group(1)), "at_or_below"
+    less = _THRESH_LESS.search(text)
+    if less:
+        return float(less.group(1)), "less_than"
+    if market.resolution.threshold:
+        try:
+            value = float(str(market.resolution.threshold).replace(",", ""))
+        except ValueError:
+            value = None
+        else:
+            comparison = "above" if re.search(r"\babove\b", text, re.I) else None
+            return value, comparison
+    raw = market.raw_gamma or {}
+    title = str(raw.get("groupItemTitle") or "")
+    title_num = re.search(r"(\d+(?:\.\d+)?)", title)
+    if title_num and re.search(r"below|<|less", title, re.I):
+        comparison = "at_or_below" if "below" in title.lower() else "less_than"
+        return float(title_num.group(1)), comparison
+    above = _THRESH_ABOVE.search(text)
+    if above:
+        return float(above.group(1)), "above"
+    exact = _THRESH_EXACT_C.search(text)
+    if exact:
+        return float(exact.group(1)), "exact_bin"
+    return None, None
+
+
 def parse_weather_resolution(market: MarketRecord) -> WeatherResolutionSpec:
     """Parse weather resolution rules from market metadata. Never guess the official source."""
     text = _joined_resolution_text(market)
-    source = market.resolution.source or (market.raw_gamma or {}).get("resolutionSource")
-    source = str(source).strip() if source else None
-    city_match = _CITY.search(text) or _IN_CITY.search(text)
-    city = city_match.group(1).strip(" .") if city_match else None
-    station_match = _STATION.search(text) or _METAR.search(text)
-    station = station_match.group(1).upper() if station_match else None
+    source = _weather_source(market, text)
+    city = _weather_city(text)
+    station = _weather_station(text)
     metric_match = _METRIC.search(text)
     metric = metric_match.group(1).lower() if metric_match else None
     unit_match = _UNIT.search(text)
     unit = unit_match.group(1) if unit_match else None
     tz_match = _TZ.search(text)
     timezone = tz_match.group(1) if tz_match else None
-    rounding = "nearest_degree" if _ROUND.search(text) else None
+    rounding = _weather_rounding(text)
     window_match = _WINDOW.search(text)
     time_window = window_match.group(1).lower() if window_match else None
-    threshold: float | None = None
-    if market.resolution.threshold:
-        try:
-            threshold = float(str(market.resolution.threshold).replace(",", ""))
-        except ValueError:
-            threshold = None
-    if threshold is None:
-        thresh_m = re.search(r"(?:above|over|threshold)\s+(\d+(?:\.\d+)?)\s*(?:°[FC])?", text, re.I)
-        if thresh_m:
-            threshold = float(thresh_m.group(1))
+    threshold, comparison = _weather_threshold(market, text)
 
     fields = [source, city or station, metric, unit, time_window, timezone, rounding, threshold]
     present = sum(1 for item in fields if item is not None and item != "")
@@ -272,13 +402,15 @@ def parse_weather_resolution(market: MarketRecord) -> WeatherResolutionSpec:
     skip = None
     if not source:
         skip = ReasonCode.WEATHER_RULES_UNKNOWN
+    # Timezone is recorded when an IANA/UTC token is present. Real Gamma city
+    # markets often omit it; do not invent Asia/Shanghai etc.
     complete = bool(
         source
         and metric
         and unit
         and threshold is not None
         and (city or station)
-        and timezone
+        and time_window
         and confidence >= 0.5
     )
     if not complete and skip is None:
@@ -292,6 +424,7 @@ def parse_weather_resolution(market: MarketRecord) -> WeatherResolutionSpec:
         timezone=timezone,
         rounding_rule=rounding,
         threshold=threshold,
+        comparison=comparison,
         source=source,
         parse_confidence=confidence,
         complete=complete,

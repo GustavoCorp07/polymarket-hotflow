@@ -106,10 +106,13 @@ PnL velocity, regime labels, Parte 46 signal-quality JSON.
 ## Weather / sports paper adapters
 
 - Resolution parser extensions: weather city/station/metric/unit/window/
-  timezone/rounding/threshold/source; sports league/teams plus official
-  Sports WS `live`/`ended`/`score`/`period` when present.
+  timezone/rounding/threshold/comparison/source; sports league/teams plus official
+  Sports WS `live`/`ended`/`score`/`period` when present. Timezone is stored
+  only when IANA/UTC appears — never invented.
 - Weather FV consumes a labeled forecast distribution vs implied. Forecasts
-  are never the official resolver. No invented weather API.
+  are never the official resolver. No invented weather API. Real market text
+  comes from public Gamma (`hotflow weather-fixtures`); pytest uses those
+  fixtures plus `source=fixture` forecasts.
 - Sports: official WS URL + server-`ping`/client-`pong`. Mock frames in
   pytest. Optional short public collect (`PublicSportsSubscriber`) is
   default-off. `SportsGameCache` keys official-shape updates by `gameId`.

@@ -274,16 +274,57 @@ such as `eventState` are ignored. Data remains informational.
 Official Polymarket docs do **not** publish a weather observation WebSocket or
 resolution-observation endpoint. Do **not** invent one.
 
+**Public Gamma collect (PAPER metadata only), retrieved 2026-09-07:**
+
+| Item | Official value |
+| --- | --- |
+| List events | `GET https://gamma-api.polymarket.com/events?tag_slug=weather` ([list-events](https://docs.polymarket.com/api-reference/events/list-events) documents `tag_slug`) |
+| One market | `GET https://gamma-api.polymarket.com/markets/{id}` — same public host/fields as list-markets |
+| Event by slug | `GET https://gamma-api.polymarket.com/events/slug/{slug}` |
+
+The weather tag is broad (climate, disasters, city temperature/precip). The
+fetcher keeps public fields only: `id`, `conditionId`, `slug`, `question`,
+`description`, `resolutionSource`, `outcomes`, `endDate`, `closed`, `active`,
+`groupItemTitle`, `line`, tag labels. **No** `clobTokenIds`, fees, or secrets.
+
+CLI / script (writes `tests/fixtures/weather/`; optional gitignored `data/weather`):
+
+```bash
+hotflow weather-fixtures
+python scripts/fetch_weather_gamma_fixtures.py --out tests/fixtures/weather --data-out data/weather
+```
+
+Preferred public ids captured 2026-09-07 (text copied, not invented):
+
+| id | Question (Gamma) | Official `resolutionSource` / source sentence |
+| --- | --- | --- |
+| `2290078` | Jinan highest temp 15°C or below May 20 | `https://www.wunderground.com/history/daily/cn/jinan/ZSJN` |
+| `4238333` | London lowest temp 13°C or below Sep 7 | `https://www.weather.gov/wrh/timeseries?site=eglc` |
+| `4027989` | Seoul precip less than 75mm September | empty field; description names Korea Meteorological Administration |
+| `678686` | Will 2026 be the hottest year on record? | empty field; rank/GLOTI wording is **not** a simple city threshold → `WEATHER_RULES_UNKNOWN` |
+
+Limitations:
+
+- Timezone is recorded only when an IANA/UTC token is present. City markets
+  often omit it; **do not invent** `Asia/Shanghai` / `Europe/London`. Deadline
+  text such as `11:59 PM ET` is a fallback clock, not the observation zone.
+- Forecasts used in `paper-run --mock` are **labeled `source=fixture`**
+  synthetic features for scoring demos. They are not live NWS/KMA/NOAA.
+- If Gamma returns no weather markets at collect time, the fetcher stays and
+  writes an empty bundle. Parser regressions use previously captured public
+  Gamma text only.
+
 HOTFLOW paper weather path:
 
 - parses city / station / metric / unit / window / timezone / rounding /
-  threshold / **source** from market text
-- if the official source is missing or confidence is low → `WEATHER_RULES_UNKNOWN`
-  (never guess the resolver)
+  threshold / comparison / **source** from market text
+- if the official source is missing, rules are incomplete, or confidence is
+  low → `WEATHER_RULES_UNKNOWN` (never guess the resolver)
 - external forecasts are **features only** (`WeatherForecast.source=fixture` in
   tests). They are never a substitute for the official resolution source
 - missing forecast distribution → `WEATHER_FORECAST_MISSING`
-- pytest uses labeled fixtures only — no paid weather APIs
+- pytest uses committed Gamma fixtures + labeled forecasts only — no paid
+  weather APIs, no live collect required
 
 ### Official Python SDK (optional)
 

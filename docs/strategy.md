@@ -28,14 +28,18 @@ exists. **NO TRADE is valid.**
 ## Weather (PAPER)
 
 Parse resolution rules **before** scoring. Required structured fields: city or
-station, metric, unit, window, timezone, rounding, threshold, **official
-source**. Low parse confidence or a missing source → `WEATHER_RULES_UNKNOWN`
-/ `DO_NOT_TRADE`. Never guess the official observation source.
+station, metric, unit, window, threshold, **official source**. Timezone and
+rounding are recorded when the official text states them; they are never
+invented (real Gamma city markets often omit an IANA zone). Low parse
+confidence, missing source, or an unparseable structure (e.g. global rank /
+hottest-year) → `WEATHER_RULES_UNKNOWN` / `DO_NOT_TRADE`. Never guess the
+official observation source.
 
-External forecasts (fixture ensembles in pytest) are **features only**:
-`forecast mean/median/std` or a labeled `p_above_threshold`. They are never
+External forecasts (fixture ensembles in pytest / `paper-run --mock`) are
+**features only**: `forecast mean/median/std`, labeled `p_above_threshold`,
+or labeled `p_yes` (`WeatherForecast.source=fixture`). They are never
 substituted for the official resolver. Fair value compares that forecast
-distribution to Polymarket implied via the same NET-edge path (fetched fees).
+to Polymarket implied via the same NET-edge path (fetched fees).
 Missing forecast → `WEATHER_FORECAST_MISSING`. Toggle: `weather.enabled`.
 
 ## Sports (PAPER)

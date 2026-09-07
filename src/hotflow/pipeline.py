@@ -24,7 +24,7 @@ from hotflow.fairvalue.crypto import CryptoFairValue
 from hotflow.fairvalue.maker_taker import choose_style
 from hotflow.fairvalue.sports import sports_model_for
 from hotflow.fairvalue.twap import compute_twap_snapshot, time_remaining_seconds, twap_p_info_for_market
-from hotflow.fairvalue.weather import weather_p_above_threshold
+from hotflow.fairvalue.weather import weather_p_yes
 from hotflow.features.snapshot import build_feature_snapshot
 from hotflow.hotmarket.opportunity import score_opportunity
 from hotflow.hotmarket.score import score_hot_market
@@ -41,7 +41,7 @@ from hotflow.marketdata.twap_cache import TwapPrintCache, observation_status
 from hotflow.marketdata.weather_fixtures import (
     FixtureWeatherSource,
     WeatherForecastSource,
-    default_weather_forecast,
+    labeled_gamma_weather_forecasts,
 )
 from hotflow.portfolio.sizing import size_notional
 from hotflow.reason_codes import ReasonCode
@@ -163,8 +163,8 @@ class PaperPipeline:
             self.weather_source = weather_source
         elif use_twap_fixtures:
             src = FixtureWeatherSource()
-            src.put("chicago", default_weather_forecast())
-            src.put("default", default_weather_forecast())
+            for key, forecast in labeled_gamma_weather_forecasts().items():
+                src.put(key, forecast)
             self.weather_source = src
         else:
             self.weather_source = FixtureWeatherSource()
@@ -245,7 +245,13 @@ class PaperPipeline:
             ):
                 reason = weather_spec.skip_reason or ReasonCode.UNKNOWN_RESOLUTION
                 self._audit(market_id=market.market_id, accepted=False, reason=reason, extra=extras)
-                return {"accepted": False, "reason": reason, "weather_spec": weather_spec.model_dump()}
+                return {
+                    "accepted": False,
+                    "reason": reason,
+                    "market_id": market.market_id,
+                    "question": market.question,
+                    "weather_spec": weather_spec.model_dump(),
+                }
             forecast = self.weather_source.latest(weather_spec)
             if forecast is None:
                 self._audit(
@@ -254,9 +260,17 @@ class PaperPipeline:
                     reason=ReasonCode.WEATHER_FORECAST_MISSING,
                     extra=extras,
                 )
-                return {"accepted": False, "reason": ReasonCode.WEATHER_FORECAST_MISSING}
+                return {
+                    "accepted": False,
+                    "reason": ReasonCode.WEATHER_FORECAST_MISSING,
+                    "market_id": market.market_id,
+                    "question": market.question,
+                    "weather_spec": weather_spec.model_dump(),
+                }
             extras["weather_forecast"] = forecast.model_dump(mode="json")
-            weather_p = weather_p_above_threshold(weather_spec, forecast)
+            extras["forecast_role"] = "feature_only"
+            extras["forecast_source"] = forecast.source
+            weather_p = weather_p_yes(weather_spec, forecast)
             if weather_p is None:
                 self._audit(
                     market_id=market.market_id,
@@ -264,7 +278,14 @@ class PaperPipeline:
                     reason=ReasonCode.WEATHER_FORECAST_MISSING,
                     extra=extras,
                 )
-                return {"accepted": False, "reason": ReasonCode.WEATHER_FORECAST_MISSING}
+                return {
+                    "accepted": False,
+                    "reason": ReasonCode.WEATHER_FORECAST_MISSING,
+                    "market_id": market.market_id,
+                    "question": market.question,
+                    "weather_spec": weather_spec.model_dump(),
+                    "weather_forecast": extras["weather_forecast"],
+                }
             if p_info is None:
                 twap_p_info = weather_p
 
@@ -550,6 +571,8 @@ class PaperPipeline:
         return {
             "accepted": True,
             "reason": ReasonCode.OK,
+            "market_id": market.market_id,
+            "question": market.question,
             "order": order.model_dump(mode="json"),
             "edge": edge.model_dump(),
             "twap": twap_snap.model_dump() if twap_snap else None,
@@ -686,6 +709,51 @@ def demo_weather_market(*, hot: bool = True) -> MarketRecord:
         {"resolutionSource": source, "endDate": close, "line": 70, "description": source}
     )
     return market
+
+
+def weather_market_from_gamma_fixture(row: dict[str, Any], *, hot: bool = True) -> MarketRecord:
+    """Build a paper MarketRecord from redacted public Gamma weather text."""
+    market = demo_market(hot=hot)
+    market.market_id = str(row.get("id") or row.get("slug") or "gamma-weather")
+    market.slug = str(row.get("slug") or market.market_id)
+    market.category = "weather"
+    market.tags = list(row.get("tags") or ["weather"])
+    market.question = str(row.get("question") or "")
+    if row.get("outcomes"):
+        market.outcomes = [str(item) for item in row["outcomes"]] if isinstance(row["outcomes"], list) else market.outcomes
+    raw = {
+        "description": row.get("description"),
+        "resolutionSource": row.get("resolutionSource"),
+        "endDate": row.get("endDate"),
+        "line": row.get("line"),
+        "groupItemTitle": row.get("groupItemTitle"),
+        "id": row.get("id"),
+        "slug": row.get("slug"),
+    }
+    market.raw_gamma = {key: value for key, value in raw.items() if value is not None}
+    market.resolution = parse_resolution(
+        {
+            "resolutionSource": row.get("resolutionSource") or "",
+            "endDate": row.get("endDate"),
+            "line": row.get("line"),
+            "description": row.get("description"),
+            "groupItemTitle": row.get("groupItemTitle"),
+        }
+    )
+    # Gamma city markets often put the official source in description, not resolutionSource.
+    if not market.resolution.source:
+        parsed = parse_weather_resolution(market)
+        if parsed.source:
+            market.resolution.source = parsed.source
+            market.resolution.tradeable = True
+            market.resolution.parse_confidence = max(market.resolution.parse_confidence, parsed.parse_confidence)
+    return market
+
+
+def gamma_weather_demo_markets(*, hot: bool = True) -> list[MarketRecord]:
+    from hotflow.discovery.weather_gamma import load_weather_fixture_bundle
+
+    return [weather_market_from_gamma_fixture(row, hot=hot) for row in load_weather_fixture_bundle()]
 
 
 def demo_sports_nba_market(*, hot: bool = True) -> MarketRecord:
