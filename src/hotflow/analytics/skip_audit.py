@@ -88,7 +88,8 @@ def rollup_skip_audit(
         by_reason[reason] += 1
         by_regime[regime] += 1
         by_reason_regime[f"{reason}|{regime}"] += 1
-        codes = signal.get("reason_codes") if isinstance(signal.get("reason_codes"), list) else [reason]
+        raw_codes = signal.get("reason_codes")
+        codes = raw_codes if isinstance(raw_codes, list) else [reason]
         for code in codes:
             by_reason_codes[str(code)] += 1
         if _exhausted_of(row, signal):
