@@ -293,6 +293,24 @@ class RegimeConfig(BaseModel):
     )
 
 
+class MicrostructureConfig(BaseModel):
+    """Parte 45 — L2 book features. Thresholds are rule-based, not learned."""
+
+    depth_levels: int = 5
+    imbalance_decay: float = 0.70
+    gap_multiple: float = 2.0
+    impact_notional: float = 50.0
+    spread_tight: float = 0.015
+    spread_wide: float = 0.060
+    recent_tight_frac: float = 0.70
+    recent_wide_frac: float = 1.40
+    min_history: int = 3
+    intensity_window_s: float = 60.0
+    # Optional risk consume. 0 / None = disabled so existing paper path stays stable.
+    min_top_depth: float = 0.0
+    max_impact: float | None = None
+
+
 class PortfolioConfig(BaseModel):
     """Parte 24 — propose sizes/selection. Risk VETO remains absolute."""
 
@@ -516,6 +534,7 @@ class HotflowConfig(BaseModel):
     news: NewsEngineConfig = Field(default_factory=NewsEngineConfig)
     portfolio: PortfolioConfig = Field(default_factory=PortfolioConfig)
     regimes: RegimeConfig = Field(default_factory=RegimeConfig)
+    microstructure: MicrostructureConfig = Field(default_factory=MicrostructureConfig)
 
     @property
     def is_paper(self) -> bool:

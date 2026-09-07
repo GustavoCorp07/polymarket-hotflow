@@ -96,6 +96,11 @@ class RiskEngine:
         now: datetime | None = None,
         requested_notional: float | None = None,
         enforce_cooldown: bool = True,
+        bid_depth: float | None = None,
+        ask_depth: float | None = None,
+        book_impact: float | None = None,
+        min_top_depth: float = 0.0,
+        max_book_impact: float | None = None,
     ) -> RiskDecision:
         if self.kills.tripped:
             return RiskDecision(allowed=False, veto=True, reason=ReasonCode.KILL_SWITCH, detail=str(self.kills.reason))
@@ -150,6 +155,18 @@ class RiskEngine:
         if spread is not None and spread > cfg.max_spread:
             return RiskDecision(
                 allowed=False, veto=True, reason=ReasonCode.SPREAD_TOO_LARGE, detail="max_spread"
+            )
+
+        if min_top_depth > 0:
+            sides = [item for item in (bid_depth, ask_depth) if item is not None]
+            if sides and min(sides) < min_top_depth:
+                return RiskDecision(
+                    allowed=False, veto=True, reason=ReasonCode.LOW_LIQUIDITY, detail="min_top_depth"
+                )
+
+        if max_book_impact is not None and book_impact is not None and book_impact > max_book_impact:
+            return RiskDecision(
+                allowed=False, veto=True, reason=ReasonCode.SLIPPAGE_TOO_HIGH, detail="max_book_impact"
             )
 
         other_cat = self.state.category_exposure.get(category, 0.0)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from hotflow.features.microstructure import compact_microstructure
 from hotflow.types import LiquidityStyle, Opportunity
 
 
@@ -13,8 +14,9 @@ def signal_quality(
     decision: str,
     reason_codes: list[str],
     strategy: str,
+    extras: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    return {
+    payload: dict[str, Any] = {
         "market": opp.market_id,
         "strategy": strategy,
         "fair_probability": opp.edge.p_fair,
@@ -34,3 +36,10 @@ def signal_quality(
         "decision": decision,
         "reason_codes": reason_codes,
     }
+    micro = None
+    if extras and isinstance(extras.get("microstructure"), dict):
+        micro = extras["microstructure"]
+    compact = compact_microstructure(micro)
+    if compact:
+        payload["microstructure"] = compact
+    return payload
