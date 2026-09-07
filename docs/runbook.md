@@ -17,7 +17,8 @@ hotflow backtest --fixture tests/fixtures/backtest/crypto_longer_synthetic.json
 hotflow record-stream --mock
 hotflow tune --report reports/backtest-*.json --write-suggestion reports/tune-suggestion.yaml
 hotflow shadow --mock
-pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py tests/test_weather_gamma_fixtures.py tests/test_esports.py tests/test_sports_cache.py tests/test_backtest.py tests/test_recorder.py tests/test_tuner.py tests/test_observability.py tests/test_paper_ledger.py tests/test_paper_gates.py
+hotflow shadow-soak --cycles 5
+pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py tests/test_weather_gamma_fixtures.py tests/test_esports.py tests/test_sports_cache.py tests/test_backtest.py tests/test_recorder.py tests/test_tuner.py tests/test_observability.py tests/test_paper_ledger.py tests/test_paper_gates.py tests/test_shadow_gates.py
 pytest -q
 ```
 
@@ -82,10 +83,33 @@ Suggestions are **not** applied. `--write-suggestion` must be under `reports/`.
 
 ```bash
 hotflow shadow --mock
+hotflow shadow --mock --cycles 5 --stale-probe --compare-paper
+hotflow shadow-soak --cycles 5 --serve-metrics
+# or: python scripts/shadow_soak.py --cycles 5
 ```
 
 Or set `trading.mode: shadow` / `trading.shadow: true`. Decisions and
-`would_buy` / `would_sell` / `expected_price` audits are written; **no orders**.
+`would_buy` / `would_sell` / `expected_price` / `actual_price_after_signal` /
+`simulated_fill` rows are written for **accepted and rejected** paths;
+`simulated_fill.sent` stays false. **No orders.** `actual_price_after_signal`
+is a later-cycle observed mid or null — never invented.
+
+`--stale-probe` ages a fixture book past `MAX_DATA_AGE` and expects a STALE /
+kill skip with `would_buy=false` / `would_sell=false`. `--compare-paper` runs
+the same fixtures through a separate paper pipeline and records agreement
+between paper fills and shadow `would_*`. That is **not** a live-edge claim.
+
+## Parte 59 shadow gates
+
+Ready for SHADOW when:
+
+- paper is stable (`hotflow paper-soak`)
+- signal logging is complete (every row has reason + would_* + prices + unsent fill)
+- simulated fills are unsent and share-sized from the decision, not a venue print
+- data loss is detected (stale / reconnect / `MAX_DATA_AGE` blocks new `would_*`)
+- performance is reproducible from the same fixtures (report under `reports/`)
+
+LIVE stays gated.
 
 ## LIVE
 

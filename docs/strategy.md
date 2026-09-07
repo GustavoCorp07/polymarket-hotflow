@@ -83,8 +83,10 @@ Do not pick a strategy by max absolute backtest PnL.
 drawdown, and skip codes. It never writes `configs/default.yaml` and never
 uses abs PnL as an objective.
 
-SHADOW scores the same path and records `would_buy` / `would_sell` without
-sending orders.
+SHADOW scores the same path and records `would_buy` / `would_sell` /
+`expected_price` / `actual_price_after_signal` / `simulated_fill` without
+sending orders (`sent=false`). Stale / `MAX_DATA_AGE` skips have no `would_*`
+intent. `hotflow shadow-soak` writes a multi-cycle report.
 
 ## Signal contract (Parte 46)
 

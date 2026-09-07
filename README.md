@@ -52,6 +52,7 @@ hotflow backtest --fixture tests/fixtures/backtest/crypto_longer_synthetic.json
 hotflow record-stream --mock
 hotflow tune --report reports/backtest-*.json --write-suggestion reports/tune-suggestion.yaml
 hotflow shadow --mock
+hotflow shadow-soak --cycles 5
 hotflow paper-run --mock --cycles 3 --flatten
 hotflow paper-soak --cycles 5
 

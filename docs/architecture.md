@@ -125,8 +125,8 @@ PnL velocity, regime labels, Parte 46 signal-quality JSON.
   unchanged. Toggles: `weather.enabled`, `sports.enabled` (live sports
   client off).
 - Backtest: `hotflow backtest --fixture` replays time-ordered book/trade/state
-  events through the same FV/risk path. No look-ahead. SHADOW logs
-  `would_buy` / `would_sell` and never transmits.
+  events through the same FV/risk path. No look-ahead. SHADOW soak logs
+  complete `would_*` / prices / unsent `simulated_fill` and never transmits.
 - Recorder: `hotflow record-stream --mock` (default) or optional `--live`
   public CLOB book poll + optional RTDS. Tuner: suggestion JSON/YAML only.
 

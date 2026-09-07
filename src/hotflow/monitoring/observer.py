@@ -341,6 +341,29 @@ class Observability:
             )
 
     def observe_shadow(self, rows: list[dict[str, Any]]) -> None:
+        for row in rows:
+            intent = "skip"
+            if row.get("would_buy"):
+                intent = "would_buy"
+            elif row.get("would_sell"):
+                intent = "would_sell"
+            reason = str(row.get("reason") or "NO_TRADE")
+            self.metrics.shadow_decisions.labels(intent=intent, reason=reason).inc()
+            if self.mon.json_logs:
+                fill = row.get("simulated_fill") if isinstance(row.get("simulated_fill"), dict) else {}
+                self.logger.emit(
+                    "shadow",
+                    mode="shadow",
+                    market_id=row.get("market_id"),
+                    reason=reason,
+                    would_buy=bool(row.get("would_buy")),
+                    would_sell=bool(row.get("would_sell")),
+                    expected_price=row.get("expected_price"),
+                    actual_price_after_signal=row.get("actual_price_after_signal"),
+                    simulated_fill_sent=False,
+                    signal_complete=bool(row.get("signal_complete")),
+                    style=fill.get("style") if isinstance(fill, dict) else None,
+                )
         if self.mon.json_logs:
             self.logger.emit("shadow_summary", decisions=len(rows), sent_orders=False, mode="shadow")
 

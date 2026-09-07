@@ -351,32 +351,70 @@ def backtest(
 def shadow(
     config: Path | None = typer.Option(None, "--config", "-c"),
     mock: bool = typer.Option(True, "--mock", help="Documented fixtures only"),
+    cycles: int = typer.Option(1, "--cycles"),
     out: Path | None = typer.Option(None, "--out"),
+    serve_metrics: bool = typer.Option(False, "--serve-metrics", help="Bind localhost /metrics /health /ready"),
+    compare_paper: bool = typer.Option(
+        False, "--compare-paper", help="Same-fixture paper fills vs shadow would_* (no live-edge claim)"
+    ),
+    stale_probe: bool = typer.Option(False, "--stale-probe", help="Age a fixture book and assert STALE skip"),
 ) -> None:
     """Score would_buy / would_sell on real-shaped data. Never sends orders."""
-    from hotflow.backtest.shadow import run_shadow
+    from hotflow.backtest.shadow import ShadowSession, compare_shadow_vs_paper, run_stale_probe
+    from hotflow.portfolio.session import mock_markets
 
     cfg = load_config(config)
     if cfg.trading.mode.lower() == "live":
         raise typer.BadParameter("shadow refuses LIVE mode")
+    if not mock:
+        raise typer.BadParameter("shadow --mock is the supported path in this pass")
     cfg.trading.mode = "shadow"
     cfg.trading.shadow = True
-    obs = Observability.from_config(cfg, announce_restart=False)
-    if mock:
-        markets = [
-            demo_twap_market(hot=True),
-            demo_weather_market(hot=True),
-            demo_sports_nba_market(hot=True),
-        ]
-        rows = run_shadow(cfg, markets, obs=obs)
-    else:
-        raise typer.BadParameter("shadow --mock is the supported path in this pass")
-    payload = {"mode": "shadow", "sent_orders": False, "results": rows}
+    cfg = _prepare_mock_config(cfg)
+    obs = _observability(cfg, serve=serve_metrics)
+    session = ShadowSession(cfg, obs=obs, use_twap_fixtures=True)
+    markets = mock_markets()
+    for _cycle in range(max(1, cycles)):
+        session.run_cycle(markets)
+    if stale_probe:
+        run_stale_probe(session)
+    if compare_paper:
+        paper_cfg = _prepare_mock_config(load_config(config))
+        session.comparison = compare_shadow_vs_paper(paper_cfg, markets)
+    payload = session.report()
     target = out or Path(cfg.storage.reports_dir) / (
         f"shadow-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}.json"
     )
     write_report(target, payload)
-    typer.echo(f"shadow decisions={len(rows)} sent_orders=0 report={target}")
+    complete = payload.get("completeness") or {}
+    intents = payload.get("intents") or {}
+    typer.echo(
+        f"shadow mode=shadow cycles={payload.get('cycle_count')} "
+        f"decisions={complete.get('rows', 0)} complete={complete.get('complete', 0)} "
+        f"would_buy={intents.get('would_buy', 0)} skip={intents.get('skip', 0)} "
+        f"sent_orders=0 report={target}"
+    )
+
+
+@app.command("shadow-soak")
+def shadow_soak(
+    config: Path | None = typer.Option(None, "--config", "-c"),
+    cycles: int = typer.Option(5, "--cycles"),
+    serve_metrics: bool = typer.Option(False, "--serve-metrics"),
+    compare_paper: bool = typer.Option(True, "--compare-paper/--no-compare-paper"),
+    stale_probe: bool = typer.Option(True, "--stale-probe/--no-stale-probe"),
+    out: Path | None = typer.Option(None, "--out"),
+) -> None:
+    """Longer SHADOW soak: completeness, stale probe, optional paper comparison. No orders."""
+    shadow(
+        config=config,
+        mock=True,
+        cycles=cycles,
+        out=out,
+        serve_metrics=serve_metrics,
+        compare_paper=compare_paper,
+        stale_probe=stale_probe,
+    )
 
 
 @app.command("record-stream")

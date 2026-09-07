@@ -24,6 +24,7 @@ REQUIRED_METRIC_NAMES = (
     "hotflow_rtds_health",
     "hotflow_sports_health",
     "hotflow_signals_total",
+    "hotflow_shadow_decisions_total",
     "hotflow_trades_total",
     "hotflow_orders_total",
     "hotflow_fees_total",
@@ -92,6 +93,12 @@ class MetricsRegistry:
 
         self.signals = Counter(
             "hotflow_signals_total", "Signals", ["decision", "reason"], registry=self.registry
+        )
+        self.shadow_decisions = Counter(
+            "hotflow_shadow_decisions_total",
+            "Shadow decisions (never order submits)",
+            ["intent", "reason"],
+            registry=self.registry,
         )
         self.trades = Counter("hotflow_trades_total", "Trades", ["status"], registry=self.registry)
         self.orders = Counter("hotflow_orders_total", "Orders", ["status"], registry=self.registry)
