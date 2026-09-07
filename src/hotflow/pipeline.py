@@ -846,6 +846,8 @@ class PaperPipeline:
                 "detail": alloc.detail,
                 "portfolio": alloc.as_dict(),
                 **extras,
+                "market_id": market.market_id,
+                "question": market.question,
             }
 
         decision = self.risk.decide(
@@ -878,6 +880,8 @@ class PaperPipeline:
                 "detail": decision.detail,
                 "portfolio": alloc.as_dict(),
                 **extras,
+                "market_id": market.market_id,
+                "question": market.question,
             }
 
         quality = signal_quality(

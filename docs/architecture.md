@@ -64,7 +64,8 @@ evaluate hot path consumes structured `NewsImpact` features already computed.
 6. **Portfolio (Parte 24)** — when several names are hot in one scan, rank by
    opportunity / risk-adjusted PnL velocity and propose TAKE / DOWNSIZE / SKIP
    under explicit correlation groups and concentration caps. Never invents a
-   residual correlation. Does not place orders.
+   residual correlation. Does not place orders. `paper-soak --mixed` is the
+   fixture audit of that batch (5m/15m crypto + news + uncorrelated names).
 7. **Risk** — absolute **VETO**. Limits on order / market / category / total
    exposure, daily/session loss, drawdown, open orders, concurrent markets,
    slippage, spread, data age, latency, cooldown. **NO TRADE is valid.** No

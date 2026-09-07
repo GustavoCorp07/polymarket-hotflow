@@ -38,6 +38,10 @@ still runs. A score of 100 still cannot force a blocked order.
 Correlation is rule-based only (same underlying, same category+window, tag
 overlap, YAML groups). No estimated residual. See `docs/strategy.md`.
 
+`hotflow paper-soak --mixed` audits those skips/downsizes and group-scoped
+regime scales on a deterministic 5m/15m + news book. It does not open LIVE
+gates and cannot bypass VETO.
+
 ## Capital order (Parte 54)
 
 1. Survive  

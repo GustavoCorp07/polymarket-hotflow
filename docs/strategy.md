@@ -175,3 +175,16 @@ strategy gate. **Risk VETO is unchanged** and still runs on every TAKE.
 
 `portfolio.regimes` maps a detected label id (e.g. `news_shock`) to group-cap
 scales. No learned ML regimes in this pass.
+
+## Mixed paper soak
+
+`hotflow paper-soak --mixed` is PAPER-only and **fixture-driven** (not a live
+Gamma scan). One book includes BTC+ETH 5m, BTC+ETH 15m, Chicago weather, and
+NBA, plus a labeled news-shock recipe. It measures how often
+`CORRELATED_EXPOSURE` / `PORTFOLIO_DOWNSIZED` / regime overlays fire.
+
+5m vs 15m is not a free extra slot: `same_category_window` links equal
+windows only; `same_underlying` links BTC 5m↔15m; YAML `crypto_short_window`
+joins all short windows (`max_markets: 1` by default). That is an explicit
+group, not a measured rho. `--long` remains the labeled ≥50-close ledger soak
+and does not go through the allocator.

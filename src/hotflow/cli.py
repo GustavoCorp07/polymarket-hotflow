@@ -636,11 +636,55 @@ def paper_soak(
     long: bool = typer.Option(
         False, "--long", help="Labeled synthetic official-shape lots until ≥50 closes (PAPER)"
     ),
+    mixed: bool = typer.Option(
+        False,
+        "--mixed",
+        help="Deterministic 5m/15m crypto + news + weather/sports book (allocator/regime audit)",
+    ),
     target_closes: int | None = typer.Option(
         None, "--target-closes", help="Labeled closed trades to record (implies long soak)"
     ),
 ) -> None:
-    """PAPER soak. Default: short mock + flatten + kill drill. --long writes ≥50 labeled closes."""
+    """PAPER soak. Default: short mock + flatten + kill drill. --long labeled closes. --mixed allocator audit."""
+    if mixed and (long or target_closes is not None):
+        raise typer.BadParameter("paper-soak --mixed cannot combine with --long / --target-closes")
+    if mixed:
+        from hotflow.portfolio.mixed_soak import run_mixed_paper_soak
+        from hotflow.portfolio.session import PaperSession
+
+        cfg = load_config(config)
+        if cfg.trading.mode.lower() == "live":
+            raise typer.BadParameter("paper-soak --mixed refuses LIVE mode")
+        cfg = _prepare_mock_config(cfg)
+        cfg.trading.mode = "paper"
+        obs = _observability(cfg, serve=serve_metrics)
+        session = PaperSession(cfg, _store(cfg), obs=obs, use_twap_fixtures=True)
+        meta = run_mixed_paper_soak(session, cycles=cycles)
+        payload = session.report()
+        payload.update(meta)
+        snap = session.ledger.snapshot()
+        payload["ledger"] = {
+            "origin": meta.get("origin"),
+            "starting_cash": snap.starting_cash,
+            "snapshot": snap.as_dict(),
+            "events": payload.get("events"),
+        }
+        payload["auto_disable"] = False
+        target = out or Path(cfg.storage.reports_dir) / (
+            f"paper-soak-mixed-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}.json"
+        )
+        write_report(target, payload)
+        totals = meta.get("totals") or {}
+        typer.echo(
+            f"paper-soak mixed origin={meta.get('origin')} cycles={meta.get('cycles')} "
+            f"accepted={totals.get('accepted')} skipped={totals.get('skipped')} "
+            f"correlated={totals.get('correlated_exposure')} "
+            f"downsize={totals.get('portfolio_downsized')} "
+            f"news_shock_overlay={(totals.get('overlay_applied') or {}).get('news_shock', 0)} "
+            f"near_resolution_overlay={(totals.get('overlay_applied') or {}).get('near_resolution', 0)} "
+            f"equity={snap.equity:.4f} live=false report={target}"
+        )
+        return
     if long or target_closes is not None:
         from hotflow.portfolio.long_soak import DEFAULT_TARGET_CLOSES, run_labeled_long_soak
         from hotflow.portfolio.session import PaperSession

@@ -63,6 +63,7 @@ hotflow walk-forward --from-reports reports
 hotflow paper-run --mock --cycles 3 --flatten
 hotflow paper-soak --cycles 5
 hotflow paper-soak --long --target-closes 50
+hotflow paper-soak --mixed --cycles 5
 
 # Optional localhost observability (PAPER only; off by default)
 hotflow serve-metrics

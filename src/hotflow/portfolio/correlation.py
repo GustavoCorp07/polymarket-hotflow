@@ -343,3 +343,6 @@ class ExposureBook:
 
     def snapshot(self) -> list[OpenExposure]:
         return list(self.by_market.values())
+
+    def clear(self) -> None:
+        self.by_market.clear()

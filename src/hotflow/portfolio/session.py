@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from hotflow.config import HotflowConfig
@@ -77,8 +78,14 @@ class PaperSession:
         self.marks[token] = price
         self.ledger.mark(token, price, market_id=market.market_id)
 
-    def run_markets(self, markets: list[MarketRecord]) -> dict[str, Any]:
-        results = self.pipe.evaluate_markets(markets)
+    def run_markets(
+        self,
+        markets: list[MarketRecord],
+        *,
+        p_info: float | None = None,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        results = self.pipe.evaluate_markets(markets, p_info=p_info, now=now)
         for market, result in zip(markets, results, strict=True):
             self._remember_marks(market, result)
         self.obs.snapshot_pipeline(self.pipe)
