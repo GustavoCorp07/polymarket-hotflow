@@ -232,11 +232,65 @@ class CorrelationGroupConfig(BaseModel):
 
 
 class PortfolioRegimeConfig(BaseModel):
-    """Optional fixture-labeled overlay. Applied only when the label is present."""
+    """Allocator overlay. Applied when a detected or fixture label is present."""
 
     id: str
     assumption: str
     group_scales: dict[str, float] = Field(default_factory=dict)
+
+
+class RegimeCryptoConfig(BaseModel):
+    """Explicit crypto heuristics. Missing spread/TTR/news → that rule does not fire."""
+
+    near_resolution_s: float = 900.0
+    high_vol_spread: float = 0.08
+    low_vol_spread: float = 0.015
+    liquidity_vacuum: float = 200.0
+    vacuum_spread: float = 0.06
+    news_shock_min_relevance: float = 0.4
+    news_shock_classes: list[str] = Field(default_factory=lambda: ["official", "wire", "breaking"])
+    trend_imbalance: float = 0.35
+    mean_reversion_imbalance: float = 0.10
+    mean_reversion_dev: float = 0.02
+
+
+class RegimeSportsConfig(BaseModel):
+    """Official Sports WS period/live/ended only. No invented clock."""
+
+    enabled: bool = True
+
+
+class RegimeWeatherConfig(BaseModel):
+    """TTR + labeled forecast dispersion. Missing both → N/A."""
+
+    near_resolution_s: float = 3_600.0
+    observation_phase_s: float = 21_600.0
+    uncertain_std_frac: float = 0.15
+    converging_std_frac: float = 0.05
+
+
+class RegimeStrategyConfig(BaseModel):
+    """Empty enabled_regimes = all allowed except disabled_regimes."""
+
+    enabled_regimes: list[str] = Field(default_factory=list)
+    disabled_regimes: list[str] = Field(default_factory=list)
+
+
+class RegimeConfig(BaseModel):
+    """Parte 25 — first-class detectors. Never bypass risk."""
+
+    enabled: bool = True
+    crypto: RegimeCryptoConfig = Field(default_factory=RegimeCryptoConfig)
+    sports: RegimeSportsConfig = Field(default_factory=RegimeSportsConfig)
+    weather: RegimeWeatherConfig = Field(default_factory=RegimeWeatherConfig)
+    strategies: dict[str, RegimeStrategyConfig] = Field(
+        default_factory=lambda: {
+            "crypto": RegimeStrategyConfig(),
+            "weather": RegimeStrategyConfig(),
+            "sports": RegimeStrategyConfig(),
+            "esports": RegimeStrategyConfig(),
+        }
+    )
 
 
 class PortfolioConfig(BaseModel):
@@ -289,9 +343,19 @@ class PortfolioConfig(BaseModel):
         default_factory=lambda: [
             PortfolioRegimeConfig(
                 id="news_shock",
-                assumption="Fixture-labeled news-shock: tighten short-window crypto cap.",
+                assumption="Detected or fixture news-shock: tighten short-window crypto cap.",
                 group_scales={"crypto_short_window": 0.5},
-            )
+            ),
+            PortfolioRegimeConfig(
+                id="liquidity_vacuum",
+                assumption="Detected liquidity vacuum: tighten short-window crypto cap.",
+                group_scales={"crypto_short_window": 0.5},
+            ),
+            PortfolioRegimeConfig(
+                id="near_resolution",
+                assumption="Near-resolution weather: tighten same-city weather cap.",
+                group_scales={"weather_city": 0.5},
+            ),
         ]
     )
 
@@ -451,6 +515,7 @@ class HotflowConfig(BaseModel):
     tuner: TunerConfig = Field(default_factory=TunerConfig)
     news: NewsEngineConfig = Field(default_factory=NewsEngineConfig)
     portfolio: PortfolioConfig = Field(default_factory=PortfolioConfig)
+    regimes: RegimeConfig = Field(default_factory=RegimeConfig)
 
     @property
     def is_paper(self) -> bool:

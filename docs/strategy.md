@@ -150,7 +150,28 @@ BTC/ETH/SOL — **not** a measured rho), `weather_city`, `sports_game`,
 `esports_match`. Weather/sports/esports buckets are keyed by parsed city/game/
 match, so Chicago vs London can both pass.
 
-Optional fixture label `raw_gamma.hotflow_regime` (e.g. `news_shock`) may
-**scale** a group's cap. It does not invent a new link. Skip reason:
-`CORRELATED_EXPOSURE`. Partial room: `PORTFOLIO_DOWNSIZED` (still goes to risk).
-Concentration vs open/category/total: `PORTFOLIO_CONCENTRATION`.
+Detected regime labels (Parte 25) and optional fixture stamp
+`raw_gamma.hotflow_regime` may **scale** a group's cap. They do not invent a
+new correlation link. Skip reason: `CORRELATED_EXPOSURE`. Partial room:
+`PORTFOLIO_DOWNSIZED` (still goes to risk). Concentration vs open/category/total:
+`PORTFOLIO_CONCENTRATION`.
+
+## Regime detection (Parte 25)
+
+Labels are attached on evaluate / scan (`extras.regime`). Detectors use
+**explicit features only**. Missing spread, TTR, news apply, forecast
+dispersion, or sports period → that rule does not fire; primary is `N/A`
+(`invented: false`).
+
+| Category | Labels | Features |
+| --- | --- | --- |
+| Crypto | `low_volatility` / `normal` / `high_volatility` / `trend` / `mean_reversion` / `news_shock` / `liquidity_vacuum` / `near_resolution` | book spread, TTR, validated news apply+class, liquidity, imbalance+last trade vs mid |
+| Sports | `pre_game` / `early_live` / `mid_game` / `late_game` / `overtime` | official Sports WS `live` / `ended` / `period` / `status` |
+| Weather | `forecast_uncertainty_high` / `forecast_converging` / `observation_phase` / `near_resolution` | TTR + labeled forecast std or ensemble_spread |
+
+YAML `regimes.strategies.<category>.disabled_regimes` (or a non-empty
+`enabled_regimes` allow-list) can skip with `REGIME_DISABLED`. That is a
+strategy gate. **Risk VETO is unchanged** and still runs on every TAKE.
+
+`portfolio.regimes` maps a detected label id (e.g. `news_shock`) to group-cap
+scales. No learned ML regimes in this pass.

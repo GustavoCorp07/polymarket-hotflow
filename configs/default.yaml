@@ -255,9 +255,51 @@ portfolio:
       max_markets: 1
   regimes:
     - id: news_shock
-      assumption: "Fixture-labeled news-shock: tighten short-window crypto cap."
+      assumption: "Detected or fixture news-shock: tighten short-window crypto cap."
       group_scales:
         crypto_short_window: 0.5
+    - id: liquidity_vacuum
+      assumption: "Detected liquidity vacuum: tighten short-window crypto cap."
+      group_scales:
+        crypto_short_window: 0.5
+    - id: near_resolution
+      assumption: "Near-resolution weather: tighten same-city weather cap."
+      group_scales:
+        weather_city: 0.5
+
+# Parte 25 — first-class detectors. Missing features → N/A, never invented.
+# Regime may scale allocator groups or disable a category; it never bypasses risk.
+regimes:
+  enabled: true
+  crypto:
+    near_resolution_s: 900
+    high_vol_spread: 0.08
+    low_vol_spread: 0.015
+    liquidity_vacuum: 200
+    vacuum_spread: 0.06
+    news_shock_min_relevance: 0.4
+    news_shock_classes: [official, wire, breaking]
+    trend_imbalance: 0.35
+    mean_reversion_imbalance: 0.10
+    mean_reversion_dev: 0.02
+  weather:
+    near_resolution_s: 3600
+    observation_phase_s: 21600
+    uncertain_std_frac: 0.15
+    converging_std_frac: 0.05
+  strategies:
+    crypto:
+      enabled_regimes: []
+      disabled_regimes: []
+    weather:
+      enabled_regimes: []
+      disabled_regimes: []
+    sports:
+      enabled_regimes: []
+      disabled_regimes: []
+    esports:
+      enabled_regimes: []
+      disabled_regimes: []
 
 # PAPER news overlay. Labeled fixtures / injected items only.
 # Never BUY/SELL from news. Public fetch stays off (no scrape in this pass).

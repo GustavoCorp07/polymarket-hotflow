@@ -110,13 +110,14 @@ when safe (`STALE_DATA` / `KILL_SWITCH_STALE_WS`).
 ## Configuration
 
 All tunables live in `configs/*.yaml` (`trading`, `scanner`, `hot_market`,
-`opportunity`, `fair_value`, `risk`, `portfolio`, `categories`, `feeds`,
+`opportunity`, `fair_value`, `risk`, `portfolio`, `regimes`, `categories`, `feeds`,
 `weather`, `sports`, `esports`, `news`, `backtest`, `ai_research`).
 No scattered magic numbers in strategy code.
 
 Also: resolution parser (unknown rules ⇒ DO_NOT_TRADE), basic filter,
 microstructure (mid/microprice/imbalance), capped Kelly sizing, maker/taker EV,
-PnL velocity, regime labels, Parte 46 signal-quality JSON, Parte 52–53
+PnL velocity, first-class regime detectors (Parte 25; N/A if features missing),
+Parte 46 signal-quality JSON, Parte 52–53
 performance/decay reviews from existing ledger/backtest JSON (suggestion-only).
 
 ## Weather / sports paper adapters

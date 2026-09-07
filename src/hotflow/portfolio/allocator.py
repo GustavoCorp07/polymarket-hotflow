@@ -257,10 +257,7 @@ class PortfolioAllocator:
             skip_detail = "max_total_exposure"
         room = min(room, cat_room, total_room, order_room)
 
-        regime_labels = {item.identity.regime_label} if item.identity.regime_label else set()
         for other in existing:
-            if other.identity.regime_label:
-                regime_labels.add(other.identity.regime_label)
             pair_hits = correlation_hits(item.identity, other.identity, self.config)
             if not pair_hits:
                 continue
@@ -282,16 +279,23 @@ class PortfolioAllocator:
             room = min(room, corr_room)
 
         for group_id, bucket in group_buckets(item.identity, self.config.groups):
-            cap, max_markets, assumption = _group_cap(
-                group_id, self.config, self.risk, regime_labels=regime_labels
-            )
-            assumptions.append(assumption)
             members = [
                 other
                 for other in existing
                 if other.market_id != item.market_id
                 and any(b == bucket for _, b in group_buckets(other.identity, self.config.groups))
             ]
+            group_labels = set(item.identity.regime_labels)
+            if item.identity.regime_label:
+                group_labels.add(item.identity.regime_label)
+            for other in members:
+                group_labels.update(other.identity.regime_labels)
+                if other.identity.regime_label:
+                    group_labels.add(other.identity.regime_label)
+            cap, max_markets, assumption = _group_cap(
+                group_id, self.config, self.risk, regime_labels=group_labels
+            )
+            assumptions.append(assumption)
             used = sum(other.notional for other in members)
             names = {other.market_id for other in members}
             if item.market_id not in names and len(names) >= max_markets:

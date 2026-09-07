@@ -102,6 +102,7 @@ class ExposureIdentity:
     game: str | None
     match: str | None
     regime_label: str | None
+    regime_labels: tuple[str, ...] = ()
     source_notes: tuple[str, ...] = ()
 
     def specific_tags(self, generic: list[str]) -> frozenset[str]:
@@ -124,7 +125,12 @@ class OpenExposure:
     identity: ExposureIdentity
 
 
-def extract_identity(market: MarketRecord, *, category: str | None = None) -> ExposureIdentity:
+def extract_identity(
+    market: MarketRecord,
+    *,
+    category: str | None = None,
+    extra_labels: list[str] | tuple[str, ...] | None = None,
+) -> ExposureIdentity:
     cat = category or infer_category(market.tags, market.category)
     tags = frozenset(tag.strip().lower() for tag in market.tags if tag and tag.strip())
     question = market.question or ""
@@ -172,12 +178,19 @@ def extract_identity(market: MarketRecord, *, category: str | None = None) -> Ex
         if match:
             notes.append(f"esports match={match}")
 
-    regime = None
+    labels: list[str] = []
     raw = market.raw_gamma or {}
     labeled = raw.get("hotflow_regime") or raw.get("regime")
     if isinstance(labeled, str) and labeled.strip():
-        regime = labeled.strip().lower()
-        notes.append(f"fixture regime label={regime}")
+        stamp = labeled.strip().lower()
+        labels.append(stamp)
+        notes.append(f"fixture regime label={stamp}")
+    for item in extra_labels or ():
+        text = str(item).strip().lower()
+        if text and text not in labels and text != "n/a":
+            labels.append(text)
+    if extra_labels:
+        notes.append(f"detected regime labels={list(extra_labels)}")
 
     return ExposureIdentity(
         market_id=market.market_id,
@@ -189,7 +202,8 @@ def extract_identity(market: MarketRecord, *, category: str | None = None) -> Ex
         station=station,
         game=game,
         match=match,
-        regime_label=regime,
+        regime_label=labels[0] if labels else None,
+        regime_labels=tuple(labels),
         source_notes=tuple(notes),
     )
 

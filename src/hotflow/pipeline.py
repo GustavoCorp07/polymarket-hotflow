@@ -9,6 +9,7 @@ from typing import Any
 
 from hotflow.analytics.experiments import git_commit
 from hotflow.analytics.pnl_velocity import pnl_velocity
+from hotflow.analytics.regimes import RegimeReport, detect_regime, strategy_blocked
 from hotflow.analytics.signal_quality import signal_quality
 from hotflow.config import HotflowConfig
 from hotflow.discovery.resolution import (
@@ -28,6 +29,7 @@ from hotflow.fairvalue.sports import sports_model_for
 from hotflow.fairvalue.twap import compute_twap_snapshot, time_remaining_seconds, twap_p_info_for_market
 from hotflow.fairvalue.weather import weather_p_yes
 from hotflow.features.snapshot import build_feature_snapshot
+from hotflow.features.time_features import time_to_resolution_seconds
 from hotflow.hotmarket.opportunity import score_opportunity
 from hotflow.hotmarket.score import score_hot_market
 from hotflow.hotmarket.watchlist import resource_plan
@@ -65,6 +67,7 @@ from hotflow.types import (
     SignalAudit,
     SportsGameState,
     TwapSnapshot,
+    WeatherForecast,
 )
 
 
@@ -201,6 +204,36 @@ class PaperPipeline:
             from hotflow.news.fixtures import labeled_news_items
 
             self.news.ingest_many(labeled_news_items())
+
+    def _detect_regime(
+        self,
+        market: MarketRecord,
+        category: str,
+        extras: dict[str, Any],
+        *,
+        now: datetime,
+        forecast: WeatherForecast | None = None,
+        sports_state: SportsGameState | None = None,
+        ttr_seconds: float | None = None,
+    ) -> RegimeReport:
+        ttr = ttr_seconds
+        if ttr is None:
+            ttr = time_to_resolution_seconds(market, now=now)
+        if forecast is None and extras.get("weather_forecast"):
+            forecast = WeatherForecast.model_validate(extras["weather_forecast"])
+        if sports_state is None and extras.get("sports_state"):
+            sports_state = SportsGameState.model_validate(extras["sports_state"])
+        report = detect_regime(
+            market,
+            category=category,
+            ttr_seconds=ttr,
+            news=extras.get("news") if isinstance(extras.get("news"), dict) else None,
+            forecast=forecast,
+            sports_state=sports_state,
+            config=self.config.regimes,
+        )
+        extras["regime"] = report.as_dict()
+        return report
 
     def _audit(self, **kwargs: Any) -> SignalAudit:
         row = SignalAudit(session_id=self.config.trading.session_id, **kwargs)
@@ -410,6 +443,7 @@ class PaperPipeline:
                 }
             forecast = self.weather_source.latest(weather_spec)
             if forecast is None:
+                self._detect_regime(market, category, extras, now=now)
                 self._audit(
                     market_id=market.market_id,
                     accepted=False,
@@ -572,6 +606,9 @@ class PaperPipeline:
             if news_impact.apply and news_impact.p_info_adjusted is not None:
                 twap_p_info = news_impact.p_info_adjusted
 
+        twap_ttr = twap_snap.time_remaining_s if twap_snap is not None else None
+        regime_report = self._detect_regime(market, category, extras, now=now, ttr_seconds=twap_ttr)
+
         hms = score_hot_market(market, self.config.hot_market)
         snap = build_feature_snapshot(market, hms)
         snap.extras["resource_plan"] = resource_plan(hms.tier)
@@ -658,7 +695,9 @@ class PaperPipeline:
             signal_half_life_ms=half_life,
         )
         age = self.clock.age_ms("clob_book", now) if market.book else self.clock.age_ms("gamma", now)
-        identity = extract_identity(market, category=category)
+        identity = extract_identity(
+            market, category=category, extra_labels=regime_report.label_ids
+        )
         extras["exposure_identity"] = {
             "underlying": identity.underlying,
             "window": identity.window,
@@ -666,8 +705,27 @@ class PaperPipeline:
             "game": identity.game,
             "match": identity.match,
             "regime": identity.regime_label,
+            "regimes": list(identity.regime_labels),
             "notes": list(identity.source_notes),
         }
+        blocked = strategy_blocked(category, regime_report, self.config.regimes)
+        if blocked:
+            self._audit(
+                market_id=market.market_id,
+                accepted=False,
+                reason=ReasonCode.REGIME_DISABLED,
+                detail=blocked,
+                hms=hms.score,
+                net_edge=edge.net_expected_edge,
+                opportunity_score=opp.score,
+                extra={"regime": extras.get("regime"), **extras},
+            )
+            return {
+                "accepted": False,
+                "reason": ReasonCode.REGIME_DISABLED,
+                "detail": blocked,
+                **extras,
+            }
         candidate = AllocationCandidate.from_opportunity(
             opp, market=market, category=category, identity=identity
         )

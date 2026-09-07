@@ -14,7 +14,7 @@ Source of truth: [`MISSION-FULL.md`](MISSION-FULL.md).
 | 15 News engine | PAPER: structured ingest → classify → source validation → impact features → existing FV/risk. Skip codes `NEWS_*`. Kimi `NEWS_CLASSIFIER` cold-path stub only. `live_ready` unchanged |
 | 16–17 Half-life + maker/taker | Config + EV chooser |
 | 18–21 Exec / stale / latency / risk | Paper SM + clocks + VETO |
-| 22–25 Sizing / velocity / portfolio / regime | Capped Kelly + scores + labels + paper session ledger + **portfolio allocator** (rank by opportunity / risk-adjusted PnL velocity; explicit correlation groups; propose size/SKIP; risk VETO still absolute) |
+| 22–25 Sizing / velocity / portfolio / regime | Capped Kelly + scores + labels + paper session ledger + portfolio allocator + **first-class regime detectors** (crypto/sports/weather rules; N/A if features missing; YAML enable/disable + group-cap overlays; risk VETO still absolute) |
 | 26–27 Backtest / anti-overfit | Event-driven replay (`hotflow backtest --fixture`); longer synthetic + redacted live CLOB book sample; train/val/OOS; `hotflow walk-forward` on existing paper/backtest closes (expanding/rolling, caveated folds, labeled synthetic regime split or N/A); refuses max-abs-PnL; no auto-disable |
 | 28 Modes | backtest / paper / shadow (`hotflow shadow --mock`, `hotflow shadow-soak`) / live |
 | 29–30 Tuner / experiments | Offline tuner (`hotflow tune`) writes suggestions only; refuses abs-PnL and production config writes |
