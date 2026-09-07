@@ -70,3 +70,6 @@ class ReasonCode(StrEnum):
     NEWS_ALREADY_REPRICED = "NEWS_ALREADY_REPRICED"
     NEWS_LOW_CONFIDENCE = "NEWS_LOW_CONFIDENCE"
     NEWS_IRRELEVANT_RESOLUTION = "NEWS_IRRELEVANT_RESOLUTION"
+    # Audit slice only (Parte 46/47). Probe VWAP walked off the book.
+    # Not a default risk veto — max_impact / min_top_depth stay off.
+    IMPACT_EXHAUSTED = "IMPACT_EXHAUSTED"

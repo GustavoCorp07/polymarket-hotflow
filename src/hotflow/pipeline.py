@@ -11,7 +11,7 @@ from typing import Any
 from hotflow.analytics.experiments import git_commit
 from hotflow.analytics.pnl_velocity import pnl_velocity
 from hotflow.analytics.regimes import RegimeReport, detect_regime, strategy_blocked
-from hotflow.analytics.signal_quality import signal_quality
+from hotflow.analytics.signal_quality import signal_quality, tag_skip_reasons
 from hotflow.config import HotflowConfig
 from hotflow.discovery.resolution import (
     parse_esports_resolution,
@@ -62,8 +62,10 @@ from hotflow.risk.kill_switch import KillSwitchBoard
 from hotflow.storage.sqlite_store import SqliteStore
 from hotflow.types import (
     BookLevel,
+    EdgeBreakdown,
     KillSwitchReason,
     MarketRecord,
+    Opportunity,
     OrderBook,
     Side,
     SignalAudit,
@@ -238,7 +240,60 @@ class PaperPipeline:
         extras["regime"] = report.as_dict()
         return report
 
+    def _with_signal(self, result: dict[str, Any]) -> dict[str, Any]:
+        """Attach the last persisted Parte 46 record onto the evaluate result."""
+        if result.get("dry_run"):
+            return result
+        if result.get("signal"):
+            return result
+        if self.audits:
+            signal = self.audits[-1].extra.get("signal")
+            if isinstance(signal, dict):
+                return {**result, "signal": signal}
+        return result
+
     def _audit(self, **kwargs: Any) -> SignalAudit:
+        """Persist every PAPER decision, including refused opportunities."""
+        opp = kwargs.pop("opp", None)
+        edge = kwargs.pop("edge", None)
+        extras = kwargs.pop("extras", None)
+        reason_codes = kwargs.pop("reason_codes", None)
+        decision_label = kwargs.pop("decision", None)
+        extra = dict(kwargs.get("extra") or {})
+        merged: dict[str, Any] = {**(extras or {}), **extra}
+
+        accepted = bool(kwargs.get("accepted", False))
+        reason = str(kwargs.get("reason") or ReasonCode.NO_TRADE)
+        if isinstance(opp, Opportunity):
+            merged.setdefault("opportunity", opp.model_dump(mode="json"))
+            kwargs.setdefault("hms", opp.hms.score)
+            kwargs.setdefault("tier", opp.hms.tier.value)
+            kwargs.setdefault("opportunity_score", opp.score)
+            kwargs.setdefault("net_edge", opp.edge.net_expected_edge)
+        if isinstance(edge, EdgeBreakdown):
+            merged.setdefault("edge", edge.model_dump())
+            kwargs.setdefault("net_edge", edge.net_expected_edge)
+
+        extra_codes = list(reason_codes) if reason_codes else []
+        existing = merged.get("signal")
+        if isinstance(existing, dict) and isinstance(existing.get("reason_codes"), list):
+            extra_codes = extra_codes or [str(code) for code in existing["reason_codes"]]
+        codes = tag_skip_reasons(reason, merged, extra_codes=extra_codes, accepted=accepted)
+        if decision_label is None:
+            decision_label = "TRADE" if accepted else "SKIP"
+        quality = signal_quality(
+            opp if isinstance(opp, Opportunity) else None,
+            decision=str(decision_label),
+            reason_codes=codes,
+            strategy=self.config.experiment.strategy_id,
+            extras=merged,
+            market_id=str(kwargs.get("market_id") or ""),
+            edge=edge if isinstance(edge, EdgeBreakdown) else None,
+            hms=kwargs.get("hms"),
+            opportunity_score=kwargs.get("opportunity_score"),
+        )
+        merged["signal"] = quality
+        kwargs["extra"] = merged
         row = SignalAudit(session_id=self.config.trading.session_id, **kwargs)
         self.audits.append(row)
         if self.store:
@@ -267,13 +322,18 @@ class PaperPipeline:
             now=now,
         )
         extras["microstructure"] = feats
+        return feats
+
+    def _record_spread_history(self, market: MarketRecord, extras: dict[str, Any]) -> None:
+        feats = extras.get("microstructure")
+        if not isinstance(feats, dict):
+            return
         spread = feats.get("spread")
         if isinstance(spread, (int, float)):
             hist = self._spread_history.setdefault(market.market_id, [])
             hist.append(float(spread))
             if len(hist) > 32:
                 del hist[:-32]
-        return feats
 
     def evaluate_market(
         self,
@@ -290,6 +350,7 @@ class PaperPipeline:
         )
         if result.get("dry_run"):
             return result
+        result = self._with_signal(result)
         category = infer_category(market.tags, market.category)
         peak = self.risk.state.peak_equity
         drawdown = ((peak - self.risk.state.equity) / peak) if peak > 0 else 0.0
@@ -329,31 +390,41 @@ class PaperPipeline:
         micro_events: Sequence[Mapping[str, Any]] | None = None,
     ) -> dict[str, Any]:
         now = now or datetime.now(UTC)
+        extras: dict[str, Any] = {}
+        future_book = False
+        if market.book and market.book.fetched_at is not None:
+            skew_ms = (market.book.fetched_at - now).total_seconds() * 1000.0
+            future_book = skew_ms > self.clock.skew_tolerance_ms
+        clock_bad = latency_ms < 0 or future_book
+        stale: list[str] = []
+        if not clock_bad:
+            self.clock.touch("gamma", observed_at=market.fetched_at)
+            if market.book:
+                self.clock.touch("clob_book", observed_at=market.book.fetched_at)
+            if market.fees.known:
+                self.clock.touch("clob_fees", observed_at=market.fees.fetched_at)
+            stale = self.clock.critical_stale(now)
+        self._attach_microstructure(market, extras, now=now, events=micro_events)
+        if not clock_bad and not stale:
+            self._record_spread_history(market, extras)
         if latency_ms < 0:
             self._audit(
                 market_id=market.market_id,
                 accepted=False,
                 reason=ReasonCode.CLOCK_SKEW,
                 detail="negative_latency",
+                extras=extras,
             )
-            return {"accepted": False, "reason": ReasonCode.CLOCK_SKEW, "detail": "negative_latency"}
-        if market.book and market.book.fetched_at is not None:
-            skew_ms = (market.book.fetched_at - now).total_seconds() * 1000.0
-            if skew_ms > self.clock.skew_tolerance_ms:
-                self._audit(
-                    market_id=market.market_id,
-                    accepted=False,
-                    reason=ReasonCode.CLOCK_SKEW,
-                    detail="book_in_future",
-                )
-                return {"accepted": False, "reason": ReasonCode.CLOCK_SKEW, "detail": "book_in_future"}
-        self.clock.touch("gamma", observed_at=market.fetched_at)
-        if market.book:
-            self.clock.touch("clob_book", observed_at=market.book.fetched_at)
-        if market.fees.known:
-            self.clock.touch("clob_fees", observed_at=market.fees.fetched_at)
-
-        stale = self.clock.critical_stale(now)
+            return {"accepted": False, "reason": ReasonCode.CLOCK_SKEW, "detail": "negative_latency", **extras}
+        if future_book:
+            self._audit(
+                market_id=market.market_id,
+                accepted=False,
+                reason=ReasonCode.CLOCK_SKEW,
+                detail="book_in_future",
+                extras=extras,
+            )
+            return {"accepted": False, "reason": ReasonCode.CLOCK_SKEW, "detail": "book_in_future", **extras}
         if stale:
             self._on_stale_critical(stale)
             self._audit(
@@ -361,42 +432,60 @@ class PaperPipeline:
                 accepted=False,
                 reason=ReasonCode.STALE_DATA,
                 detail=",".join(stale),
+                extras=extras,
             )
-            return {"accepted": False, "reason": ReasonCode.STALE_DATA}
+            return {"accepted": False, "reason": ReasonCode.STALE_DATA, **extras}
 
         category = infer_category(market.tags, market.category)
         if not _category_enabled(self.config, category):
-            self._audit(market_id=market.market_id, accepted=False, reason=ReasonCode.CATEGORY_DISABLED)
-            return {"accepted": False, "reason": ReasonCode.CATEGORY_DISABLED}
+            self._audit(
+                market_id=market.market_id,
+                accepted=False,
+                reason=ReasonCode.CATEGORY_DISABLED,
+                extras=extras,
+            )
+            return {"accepted": False, "reason": ReasonCode.CATEGORY_DISABLED, **extras}
 
         if market.accepting_orders is False:
-            self._audit(market_id=market.market_id, accepted=False, reason=ReasonCode.NOT_ACCEPTING_ORDERS)
-            return {"accepted": False, "reason": ReasonCode.NOT_ACCEPTING_ORDERS}
+            self._audit(
+                market_id=market.market_id,
+                accepted=False,
+                reason=ReasonCode.NOT_ACCEPTING_ORDERS,
+                extras=extras,
+            )
+            return {"accepted": False, "reason": ReasonCode.NOT_ACCEPTING_ORDERS, **extras}
 
         if not market.resolution.tradeable:
-            self._audit(market_id=market.market_id, accepted=False, reason=ReasonCode.UNKNOWN_RESOLUTION)
-            return {"accepted": False, "reason": ReasonCode.UNKNOWN_RESOLUTION}
-
-        extras: dict[str, Any] = {}
-        self._attach_microstructure(market, extras, now=now, events=micro_events)
+            self._audit(
+                market_id=market.market_id,
+                accepted=False,
+                reason=ReasonCode.UNKNOWN_RESOLUTION,
+                extras=extras,
+            )
+            return {"accepted": False, "reason": ReasonCode.UNKNOWN_RESOLUTION, **extras}
         if category == "esports":
             if not self.config.esports.enabled:
-                self._audit(market_id=market.market_id, accepted=False, reason=ReasonCode.CATEGORY_DISABLED)
-                return {"accepted": False, "reason": ReasonCode.CATEGORY_DISABLED}
+                self._audit(
+                    market_id=market.market_id,
+                    accepted=False,
+                    reason=ReasonCode.CATEGORY_DISABLED,
+                    extras=extras,
+                )
+                return {"accepted": False, "reason": ReasonCode.CATEGORY_DISABLED, **extras}
             esports_spec = parse_esports_resolution(market)
-            extras_es: dict[str, Any] = {"esports_spec": esports_spec.model_dump()}
+            extras["esports_spec"] = esports_spec.model_dump()
             if (
                 not esports_spec.complete
                 or esports_spec.parse_confidence < self.config.esports.min_parse_confidence
             ):
                 reason = esports_spec.skip_reason or ReasonCode.ESPORTS_RULES_UNKNOWN
-                self._audit(market_id=market.market_id, accepted=False, reason=reason, extra=extras_es)
+                self._audit(market_id=market.market_id, accepted=False, reason=reason, extras=extras)
                 return {
                     "accepted": False,
                     "reason": reason,
                     "market_id": market.market_id,
                     "question": market.question,
-                    "esports_spec": esports_spec.model_dump(),
+                    **extras,
                 }
             adapter = esports_adapter_for(esports_spec.game)
             if adapter is None:
@@ -404,53 +493,51 @@ class PaperPipeline:
                     market_id=market.market_id,
                     accepted=False,
                     reason=ReasonCode.UNSUPPORTED_SPORT,
-                    extra=extras_es,
+                    extras=extras,
                 )
                 return {
                     "accepted": False,
                     "reason": ReasonCode.UNSUPPORTED_SPORT,
                     "market_id": market.market_id,
                     "question": market.question,
-                    "esports_spec": esports_spec.model_dump(),
                     "game": esports_spec.game,
+                    **extras,
                 }
             state = self.esports_source.latest(esports_spec)
-            extras_es["esports_adapter"] = adapter.title
+            extras["esports_adapter"] = adapter.title
             if state is None:
                 self._audit(
                     market_id=market.market_id,
                     accepted=False,
                     reason=ReasonCode.ESPORTS_STATE_MISSING,
-                    extra=extras_es,
+                    extras=extras,
                 )
                 return {
                     "accepted": False,
                     "reason": ReasonCode.ESPORTS_STATE_MISSING,
                     "market_id": market.market_id,
                     "question": market.question,
-                    "esports_spec": esports_spec.model_dump(),
-                    "esports_adapter": adapter.title,
+                    **extras,
                 }
-            extras_es["esports_state"] = state.model_dump(mode="json")
-            extras_es["esports_state_source"] = state.source
+            extras["esports_state"] = state.model_dump(mode="json")
+            extras["esports_state_source"] = state.source
             esports_p = adapter.p_home_win(esports_spec, state)
             if esports_p is None:
                 self._audit(
                     market_id=market.market_id,
                     accepted=False,
                     reason=ReasonCode.UNSUPPORTED_STRUCTURE,
-                    extra=extras_es,
+                    extras=extras,
                 )
                 return {
                     "accepted": False,
                     "reason": ReasonCode.UNSUPPORTED_STRUCTURE,
                     "market_id": market.market_id,
                     "question": market.question,
-                    **extras_es,
+                    **extras,
                 }
             if p_info is None:
                 p_info = esports_p
-            extras.update(extras_es)
 
         twap_spec = parse_twap_resolution(market)
         twap_snap: TwapSnapshot | None = None
@@ -458,8 +545,13 @@ class PaperPipeline:
 
         if category == "weather":
             if not self.config.weather.enabled:
-                self._audit(market_id=market.market_id, accepted=False, reason=ReasonCode.CATEGORY_DISABLED)
-                return {"accepted": False, "reason": ReasonCode.CATEGORY_DISABLED}
+                self._audit(
+                    market_id=market.market_id,
+                    accepted=False,
+                    reason=ReasonCode.CATEGORY_DISABLED,
+                    extras=extras,
+                )
+                return {"accepted": False, "reason": ReasonCode.CATEGORY_DISABLED, **extras}
             weather_spec = parse_weather_resolution(market)
             extras["weather_spec"] = weather_spec.model_dump()
             if (
@@ -467,13 +559,13 @@ class PaperPipeline:
                 or weather_spec.parse_confidence < self.config.weather.min_parse_confidence
             ):
                 reason = weather_spec.skip_reason or ReasonCode.UNKNOWN_RESOLUTION
-                self._audit(market_id=market.market_id, accepted=False, reason=reason, extra=extras)
+                self._audit(market_id=market.market_id, accepted=False, reason=reason, extras=extras)
                 return {
                     "accepted": False,
                     "reason": reason,
                     "market_id": market.market_id,
                     "question": market.question,
-                    "weather_spec": weather_spec.model_dump(),
+                    **extras,
                 }
             forecast = self.weather_source.latest(weather_spec)
             if forecast is None:
@@ -482,14 +574,14 @@ class PaperPipeline:
                     market_id=market.market_id,
                     accepted=False,
                     reason=ReasonCode.WEATHER_FORECAST_MISSING,
-                    extra=extras,
+                    extras=extras,
                 )
                 return {
                     "accepted": False,
                     "reason": ReasonCode.WEATHER_FORECAST_MISSING,
                     "market_id": market.market_id,
                     "question": market.question,
-                    "weather_spec": weather_spec.model_dump(),
+                    **extras,
                 }
             extras["weather_forecast"] = forecast.model_dump(mode="json")
             extras["forecast_role"] = "feature_only"
@@ -500,23 +592,27 @@ class PaperPipeline:
                     market_id=market.market_id,
                     accepted=False,
                     reason=ReasonCode.WEATHER_FORECAST_MISSING,
-                    extra=extras,
+                    extras=extras,
                 )
                 return {
                     "accepted": False,
                     "reason": ReasonCode.WEATHER_FORECAST_MISSING,
                     "market_id": market.market_id,
                     "question": market.question,
-                    "weather_spec": weather_spec.model_dump(),
-                    "weather_forecast": extras["weather_forecast"],
+                    **extras,
                 }
             if p_info is None:
                 twap_p_info = weather_p
 
         if category == "sports":
             if not self.config.sports.enabled:
-                self._audit(market_id=market.market_id, accepted=False, reason=ReasonCode.CATEGORY_DISABLED)
-                return {"accepted": False, "reason": ReasonCode.CATEGORY_DISABLED}
+                self._audit(
+                    market_id=market.market_id,
+                    accepted=False,
+                    reason=ReasonCode.CATEGORY_DISABLED,
+                    extras=extras,
+                )
+                return {"accepted": False, "reason": ReasonCode.CATEGORY_DISABLED, **extras}
             sports_spec = parse_sports_resolution(market)
             extras["sports_spec"] = sports_spec.model_dump()
             if (
@@ -524,17 +620,22 @@ class PaperPipeline:
                 or sports_spec.parse_confidence < self.config.sports.min_parse_confidence
             ):
                 reason = sports_spec.skip_reason or ReasonCode.UNKNOWN_RESOLUTION
-                self._audit(market_id=market.market_id, accepted=False, reason=reason, extra=extras)
-                return {"accepted": False, "reason": reason, "sports_spec": sports_spec.model_dump()}
+                self._audit(market_id=market.market_id, accepted=False, reason=reason, extras=extras)
+                return {"accepted": False, "reason": reason, **extras}
             model = sports_model_for(sports_spec.league)
             if model is None:
                 self._audit(
                     market_id=market.market_id,
                     accepted=False,
                     reason=ReasonCode.UNSUPPORTED_SPORT,
-                    extra=extras,
+                    extras=extras,
                 )
-                return {"accepted": False, "reason": ReasonCode.UNSUPPORTED_SPORT, "league": sports_spec.league}
+                return {
+                    "accepted": False,
+                    "reason": ReasonCode.UNSUPPORTED_SPORT,
+                    "league": sports_spec.league,
+                    **extras,
+                }
             cached = self.sports_source.latest(sports_spec)
             freshness = game_state_status(
                 cached,
@@ -546,18 +647,18 @@ class PaperPipeline:
                     market_id=market.market_id,
                     accepted=False,
                     reason=ReasonCode.SPORTS_STATE_STALE,
-                    extra=extras,
+                    extras=extras,
                 )
-                return {"accepted": False, "reason": ReasonCode.SPORTS_STATE_STALE}
+                return {"accepted": False, "reason": ReasonCode.SPORTS_STATE_STALE, **extras}
             state = cached if freshness == "fresh" else game_state_from_metadata(sports_spec)
             if state is None:
                 self._audit(
                     market_id=market.market_id,
                     accepted=False,
                     reason=ReasonCode.SPORTS_STATE_MISSING,
-                    extra=extras,
+                    extras=extras,
                 )
-                return {"accepted": False, "reason": ReasonCode.SPORTS_STATE_MISSING}
+                return {"accepted": False, "reason": ReasonCode.SPORTS_STATE_MISSING, **extras}
             if cached is not None:
                 self.clock.touch("sports_ws", observed_at=state.last_update)
             extras["sports_state"] = state.model_dump(mode="json")
@@ -568,9 +669,9 @@ class PaperPipeline:
                     market_id=market.market_id,
                     accepted=False,
                     reason=ReasonCode.SPORTS_STATE_MISSING,
-                    extra=extras,
+                    extras=extras,
                 )
-                return {"accepted": False, "reason": ReasonCode.SPORTS_STATE_MISSING}
+                return {"accepted": False, "reason": ReasonCode.SPORTS_STATE_MISSING, **extras}
             if p_info is None:
                 twap_p_info = sports_p
 
@@ -582,9 +683,15 @@ class PaperPipeline:
                     accepted=False,
                     reason=reason,
                     detail="twap_spec_incomplete",
+                    extras=extras,
                     extra={"twap_spec": twap_spec.model_dump()},
                 )
-                return {"accepted": False, "reason": reason, "twap_spec": twap_spec.model_dump()}
+                return {
+                    "accepted": False,
+                    "reason": reason,
+                    "twap_spec": twap_spec.model_dump(),
+                    **extras,
+                }
             observation = self.twap_source.latest(twap_spec.symbol or "", twap_spec.window_seconds or 0)
             freshness = observation_status(
                 observation,
@@ -596,12 +703,14 @@ class PaperPipeline:
                     market_id=market.market_id,
                     accepted=False,
                     reason=ReasonCode.TWAP_OBSERVATION_MISSING,
+                    extras=extras,
                     extra={"twap_spec": twap_spec.model_dump()},
                 )
                 return {
                     "accepted": False,
                     "reason": ReasonCode.TWAP_OBSERVATION_MISSING,
                     "twap_spec": twap_spec.model_dump(),
+                    **extras,
                 }
             if freshness == "stale":
                 self._audit(
@@ -609,6 +718,7 @@ class PaperPipeline:
                     accepted=False,
                     reason=ReasonCode.TWAP_OBSERVATION_STALE,
                     detail="rtds",
+                    extras=extras,
                     extra={"twap_spec": twap_spec.model_dump()},
                 )
                 return {
@@ -616,12 +726,18 @@ class PaperPipeline:
                     "reason": ReasonCode.TWAP_OBSERVATION_STALE,
                     "detail": "rtds",
                     "twap_spec": twap_spec.model_dump(),
+                    **extras,
                 }
             assert observation is not None
             remaining = time_remaining_seconds(market.resolution.end_date, now=now)
             if remaining is None:
-                self._audit(market_id=market.market_id, accepted=False, reason=ReasonCode.UNKNOWN_RESOLUTION)
-                return {"accepted": False, "reason": ReasonCode.UNKNOWN_RESOLUTION}
+                self._audit(
+                    market_id=market.market_id,
+                    accepted=False,
+                    reason=ReasonCode.UNKNOWN_RESOLUTION,
+                    extras=extras,
+                )
+                return {"accepted": False, "reason": ReasonCode.UNKNOWN_RESOLUTION, **extras}
             twap_snap = compute_twap_snapshot(
                 twap_spec,
                 observation,
@@ -660,6 +776,7 @@ class PaperPipeline:
                 reason=ReasonCode.MARKET_NOT_HOT,
                 hms=hms.score,
                 tier=hms.tier.value,
+                extras=extras,
             )
             return {
                 "accepted": False,
@@ -697,6 +814,8 @@ class PaperPipeline:
                 hms=hms.score,
                 tier=hms.tier.value,
                 net_edge=edge.net_expected_edge,
+                extras=extras,
+                edge=edge,
             )
             return {"accepted": False, "reason": edge.reason, "edge": edge.model_dump(), **extras}
 
@@ -752,7 +871,9 @@ class PaperPipeline:
                 hms=hms.score,
                 net_edge=edge.net_expected_edge,
                 opportunity_score=opp.score,
-                extra={"regime": extras.get("regime"), **extras},
+                extras=extras,
+                opp=opp,
+                edge=edge,
             )
             return {
                 "accepted": False,
@@ -872,7 +993,10 @@ class PaperPipeline:
                 hms=hms.score,
                 net_edge=edge.net_expected_edge,
                 opportunity_score=opp.score,
-                extra={"portfolio": alloc.as_dict(), **extras},
+                extras=extras,
+                extra={"portfolio": alloc.as_dict()},
+                opp=opp,
+                edge=edge,
             )
             return {
                 "accepted": False,
@@ -917,7 +1041,10 @@ class PaperPipeline:
                 hms=hms.score,
                 net_edge=edge.net_expected_edge,
                 opportunity_score=opp.score,
-                extra={"portfolio": alloc.as_dict(), **extras},
+                extras=extras,
+                extra={"portfolio": alloc.as_dict()},
+                opp=opp,
+                edge=edge,
             )
             return {
                 "accepted": False,
@@ -929,13 +1056,6 @@ class PaperPipeline:
                 "question": market.question,
             }
 
-        quality = signal_quality(
-            opp,
-            decision="TRADE" if decision.allowed else "SKIP",
-            reason_codes=[decision.reason, alloc.reason],
-            strategy=self.config.experiment.strategy_id,
-            extras=extras,
-        )
         if self.config.is_shadow:
             shadow = {
                 "would_buy": opp.side == Side.BUY,
@@ -956,7 +1076,11 @@ class PaperPipeline:
                 hms=hms.score,
                 net_edge=edge.net_expected_edge,
                 opportunity_score=opp.score,
-                extra={**shadow, "signal": quality, "portfolio": alloc.as_dict(), **extras},
+                extras=extras,
+                extra={**shadow, "portfolio": alloc.as_dict()},
+                opp=opp,
+                edge=edge,
+                reason_codes=[ReasonCode.SHADOW_MODE, decision.reason, alloc.reason],
             )
             return {
                 "accepted": False,
@@ -980,7 +1104,11 @@ class PaperPipeline:
                 tier=hms.tier.value,
                 net_edge=edge.net_expected_edge,
                 opportunity_score=opp.score,
-                extra={"backtest_intent": True, "signal": quality, "portfolio": alloc.as_dict(), **extras},
+                extras=extras,
+                extra={"backtest_intent": True, "portfolio": alloc.as_dict()},
+                opp=opp,
+                edge=edge,
+                reason_codes=[decision.reason, alloc.reason],
             )
             return {
                 "accepted": True,
@@ -999,8 +1127,15 @@ class PaperPipeline:
             }
 
         if not self.config.is_paper and not live_gates_open(self.config):
-            self._audit(market_id=market.market_id, accepted=False, reason=ReasonCode.LIVE_GATES_BLOCKED)
-            return {"accepted": False, "reason": ReasonCode.LIVE_GATES_BLOCKED}
+            self._audit(
+                market_id=market.market_id,
+                accepted=False,
+                reason=ReasonCode.LIVE_GATES_BLOCKED,
+                extras=extras,
+                opp=opp,
+                edge=edge,
+            )
+            return {"accepted": False, "reason": ReasonCode.LIVE_GATES_BLOCKED, **extras}
 
         order_started = monotonic_ms()
         order = self.broker.create(opp, price=edge.market_price, size=shares)
@@ -1048,16 +1183,18 @@ class PaperPipeline:
             tier=hms.tier.value,
             net_edge=edge.net_expected_edge,
             opportunity_score=opp.score,
+            extras=extras,
             extra={
                 "client_order_id": order.client_order_id,
                 "status": order.status.value,
-                "signal": quality,
                 "git_commit": git_commit(),
                 "strategy_version": self.config.experiment.version,
                 "twap": extras.get("twap"),
                 "portfolio": alloc.as_dict(),
-                **extras,
             },
+            opp=opp,
+            edge=edge,
+            reason_codes=[decision.reason, alloc.reason],
         )
         return {
             "accepted": True,
@@ -1091,6 +1228,7 @@ class PaperPipeline:
                 packed_idx.append(index)
                 packed_rows.append(row)
             else:
+                row = self._with_signal(row)
                 category = infer_category(market.tags, market.category)
                 peak = self.risk.state.peak_equity
                 drawdown = ((peak - self.risk.state.equity) / peak) if peak > 0 else 0.0
@@ -1117,11 +1255,13 @@ class PaperPipeline:
         for index, row, alloc in zip(packed_idx, packed_rows, allocations, strict=True):
             started = monotonic_ms()
             market = markets[index]
-            result = self._commit_prepared(
-                row["prepared"],
-                allocation=alloc,
-                candidate=row["candidate"],
-                enforce_cooldown=False,
+            result = self._with_signal(
+                self._commit_prepared(
+                    row["prepared"],
+                    allocation=alloc,
+                    candidate=row["candidate"],
+                    enforce_cooldown=False,
+                )
             )
             category = infer_category(market.tags, market.category)
             peak = self.risk.state.peak_equity

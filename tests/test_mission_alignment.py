@@ -115,6 +115,10 @@ def test_signal_quality_shape() -> None:
     assert payload["decision"] == "SKIP"
     assert "fair_probability" in payload
     assert payload["reason_codes"] == ["EDGE_TOO_SMALL"]
+    from hotflow.analytics.signal_quality import PARTE46_REQUIRED_KEYS
+
+    for key in PARTE46_REQUIRED_KEYS:
+        assert key in payload
 
 
 def test_clock_latency_percentiles() -> None:

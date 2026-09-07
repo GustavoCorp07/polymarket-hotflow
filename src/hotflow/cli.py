@@ -933,6 +933,27 @@ def live_gates_cmd(
         raise typer.Exit(code=1)
 
 
+@app.command("skip-audit")
+def skip_audit_cmd(
+    config: Path | None = typer.Option(None, "--config", "-c"),
+    out: Path | None = typer.Option(None, "--out"),
+) -> None:
+    """Parte 47 cold-path skip rollup from SQLite. No production mutation."""
+    from hotflow.analytics.skip_audit import format_skip_audit, rollup_skip_audit
+
+    cfg = load_config(config)
+    if cfg.trading.mode.lower() == "live":
+        raise typer.BadParameter("skip-audit refuses LIVE mode")
+    store = _store(cfg)
+    body = rollup_skip_audit(store.list_signals(), source=str(cfg.storage.sqlite_path))
+    target = out or Path(cfg.storage.reports_dir) / (
+        f"skip-audit-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}.json"
+    )
+    write_report(target, body)
+    typer.echo(format_skip_audit(body))
+    typer.echo(f"report={target} production_changed=False")
+
+
 @app.command()
 def version() -> None:
     from hotflow import __version__

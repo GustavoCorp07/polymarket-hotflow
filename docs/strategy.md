@@ -150,9 +150,37 @@ change. Risk VETO remains absolute.
 
 ## Signal contract (Parte 46)
 
-Every decision persists `signal_quality`: fair probability, costs, half-life,
-HMS, opportunity, style, `TRADE|SKIP`, reason codes, plus compact
-microstructure extras when a book exists.
+Every PAPER evaluate — TRADE and SKIP — persists a Parte 46 JSON on the
+SQLite `signals.extra.signal` row (and on the evaluate result). Required
+keys: `market`, `strategy`, `fair_probability`, `execution_price`,
+`gross_edge`, `expected_fee`, `expected_slippage`, `latency_penalty`,
+`net_edge`, `confidence`, `signal_half_life_ms`, `hot_market_score`,
+`opportunity_score`, `decision` (`TRADE|SKIP`), `reason_codes`.
+
+Early skips (stale, unknown resolution, not-hot, …) emit the same shape
+with **nulls** for fields the path has not computed. They do not invent
+zeros. Compact microstructure is attached when a book snapshot exists.
+
+## Why no trade (Parte 47)
+
+Refused opportunities are stored, not dropped. `reason_codes` starts with
+the primary skip (`EDGE_TOO_SMALL`, `SPREAD_TOO_LARGE`, `LOW_LIQUIDITY`,
+`CORRELATED_EXPOSURE`, `NEWS_*`, `UNKNOWN_RESOLUTION`, `RISK_LIMIT`, …).
+
+Audit-only slices from already-persisted Parte 45 fields (not default
+vetoes):
+
+| Slice | When it is appended |
+| --- | --- |
+| `SPREAD_TOO_LARGE` | `spread_regime.label == wide` (existing code) |
+| `IMPACT_EXHAUSTED` | `exhausted_buy` or `exhausted_sell` (new; book could not fill the probe notional) |
+
+`IMPACT_EXHAUSTED` is **not** `LOW_LIQUIDITY` (Gamma/filter/`min_top_depth`)
+and does **not** enable `microstructure.max_impact` / `min_top_depth`.
+Those stay off until an explicit later pass. Risk VETO remains absolute.
+
+Cold path: `hotflow skip-audit` and `scripts/hotflow_daily_review.py`
+bucket skips by `reason` × `spread_regime`. No production mutation.
 
 ## Sizing (Parte 22)
 

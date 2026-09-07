@@ -35,6 +35,10 @@ groups plus the same hard caps:
 Those proposals do **not** override VETO. After allocation, `RiskEngine.decide`
 still runs. A score of 100 still cannot force a blocked order.
 
+Optional book-depth consume (`microstructure.min_top_depth` /
+`microstructure.max_impact`) stays **default-off**. `IMPACT_EXHAUSTED` on a
+signal is an audit slice from the L2 walk, not a new veto.
+
 Correlation is rule-based only (same underlying, same category+window, tag
 overlap, YAML groups). No estimated residual. See `docs/strategy.md`.
 

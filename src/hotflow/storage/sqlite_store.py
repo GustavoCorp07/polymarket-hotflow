@@ -257,10 +257,24 @@ class SqliteStore:
 
     def list_signals(self) -> list[dict[str, Any]]:
         cur = self._conn.execute(
-            "SELECT ts, session_id, market_id, accepted, reason, detail, hms, net_edge FROM signals"
+            """SELECT ts, session_id, market_id, accepted, reason, detail, hms, tier,
+                      net_edge, opportunity_score, extra FROM signals"""
         )
         cols = [d[0] for d in cur.description]
-        return [dict(zip(cols, row, strict=True)) for row in cur.fetchall()]
+        rows: list[dict[str, Any]] = []
+        for raw in cur.fetchall():
+            item = dict(zip(cols, raw, strict=True))
+            extra = item.get("extra")
+            if isinstance(extra, str) and extra:
+                try:
+                    parsed = json.loads(extra)
+                except json.JSONDecodeError:
+                    parsed = {}
+                item["extra"] = parsed if isinstance(parsed, dict) else {}
+            elif extra is None:
+                item["extra"] = {}
+            rows.append(item)
+        return rows
 
     def iter_orders(self) -> Iterable[dict[str, Any]]:
         cur = self._conn.execute("SELECT * FROM orders")
