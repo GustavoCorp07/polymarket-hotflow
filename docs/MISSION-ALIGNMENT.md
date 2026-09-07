@@ -11,7 +11,7 @@ Source of truth: [`MISSION-FULL.md`](MISSION-FULL.md).
 | 7–9 HMS / opp / tiers | Implemented + resource plan |
 | 10–11 Crypto + fair value | Paper crypto FV + official 30s/60s TWAP path + public RTDS cache subscriber |
 | 12–14 Weather/sports/esports | PAPER weather Gamma fixtures + fixture forecasts; Sports WS cache (default-off) + NBA/Soccer; esports skip-heavy parser/fixtures (`hotflow esports-fixtures`), no invented live model |
-| 15 News engine | Not implemented (Grok cold path) |
+| 15 News engine | PAPER: structured ingest → classify → source validation → impact features → existing FV/risk. Skip codes `NEWS_*`. Kimi `NEWS_CLASSIFIER` cold-path stub only. `live_ready` unchanged |
 | 16–17 Half-life + maker/taker | Config + EV chooser |
 | 18–21 Exec / stale / latency / risk | Paper SM + clocks + VETO |
 | 22–25 Sizing / velocity / portfolio / regime | Capped Kelly + scores + labels + paper session ledger (cash/positions/realized/unrealized/fees/peak/drawdown from explicit fills) |

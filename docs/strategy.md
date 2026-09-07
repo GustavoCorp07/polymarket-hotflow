@@ -70,6 +70,31 @@ grammar. Per-title adapters refuse other games. Missing rules →
 `ESPORTS_STATE_MISSING`. Unparseable live score → `UNSUPPORTED_STRUCTURE`.
 Live Sports WS client stays off. Toggle: `esports.enabled`.
 
+## News / event engine (Parte 15, PAPER)
+
+News never goes to BUY/SELL. Flow:
+
+```text
+new information → classification → source validation → impact estimation
+      → quant model (p_info / confidence) → risk engine
+```
+
+Hot path is deterministic. Items are **labeled fixtures or injected
+`NewsItem`s**. The engine does not invent headlines, sources, or market moves.
+Missing labeled `claimed_p_shift` / `claimed_p_after` → `NEWS_UNVALIDATED`.
+
+Checks: source authority table, publication time, duplicate `event_key`,
+relevance to exact resolution wording, recency confidence, already-repriced
+(mid already at the labeled post-event probability).
+
+Kimi `NEWS_CLASSIFIER` is a **cold-path stub** (`hotflow.news.cold`). It is
+not imported by `evaluate_market`. Public news fetch is default-off and not
+implemented (`news.public_fetch: false`).
+
+`hotflow news-fixtures` writes a report. `paper-run --mock --news-fixtures`
+and `shadow --mock --news-fixtures` attach the same fixtures; shadow still
+logs `would_*` with `sent=false`.
+
 ## Backtest / shadow (Parte 26–28)
 
 Event-driven replay only. Book/trade events are required when HMS uses book

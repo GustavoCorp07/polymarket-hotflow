@@ -47,6 +47,7 @@ from hotflow.marketdata.weather_fixtures import (
     labeled_gamma_weather_forecasts,
 )
 from hotflow.monitoring.observer import Observability
+from hotflow.news.engine import NewsEngine
 from hotflow.portfolio.ledger import PaperLedger
 from hotflow.portfolio.sizing import size_notional
 from hotflow.reason_codes import ReasonCode
@@ -152,6 +153,8 @@ class PaperPipeline:
         esports_source: FixtureEsportsSource | None = None,
         obs: Observability | None = None,
         ledger: PaperLedger | None = None,
+        news_engine: NewsEngine | None = None,
+        use_news_fixtures: bool = False,
     ) -> None:
         self.config = config
         self.obs = obs or Observability.from_config(config, announce_restart=False)
@@ -189,6 +192,11 @@ class PaperPipeline:
             sports_source=sports_source,
             sports_cache_path=sports_cache_path,
         )
+        self.news = news_engine if news_engine is not None else NewsEngine(config.news)
+        if use_news_fixtures and not self.news.items:
+            from hotflow.news.fixtures import labeled_news_items
+
+            self.news.ingest_many(labeled_news_items())
 
     def _audit(self, **kwargs: Any) -> SignalAudit:
         row = SignalAudit(session_id=self.config.trading.session_id, **kwargs)
@@ -547,6 +555,14 @@ class PaperPipeline:
             if p_info is None:
                 twap_p_info = twap_p_info_for_market(market, twap_snap)
 
+        news_impact = None
+        if self.config.news.enabled:
+            news_impact = self.news.impact_for(market, p_base=twap_p_info, now=now)
+            extras["news"] = news_impact.as_dict()
+            extras["news_orders"] = False
+            if news_impact.apply and news_impact.p_info_adjusted is not None:
+                twap_p_info = news_impact.p_info_adjusted
+
         hms = score_hot_market(market, self.config.hot_market)
         snap = build_feature_snapshot(market, hms)
         snap.extras["resource_plan"] = resource_plan(hms.tier)
@@ -564,7 +580,12 @@ class PaperPipeline:
                 hms=hms.score,
                 tier=hms.tier.value,
             )
-            return {"accepted": False, "reason": ReasonCode.MARKET_NOT_HOT, "hms": hms.score}
+            return {
+                "accepted": False,
+                "reason": ReasonCode.MARKET_NOT_HOT,
+                "hms": hms.score,
+                **extras,
+            }
 
         token_id = market.token_ids[0] if market.token_ids else "unknown"
         probe_shares = market.order_min_size or 5.0
@@ -585,6 +606,8 @@ class PaperPipeline:
             twap=twap_snap,
             prior_blend=prior_blend,
         )
+        if news_impact is not None and news_impact.apply:
+            edge = edge.model_copy(update={"confidence": min(edge.confidence, news_impact.confidence)})
         if edge.skip:
             self._audit(
                 market_id=market.market_id,
@@ -594,7 +617,7 @@ class PaperPipeline:
                 tier=hms.tier.value,
                 net_edge=edge.net_expected_edge,
             )
-            return {"accepted": False, "reason": edge.reason, "edge": edge.model_dump()}
+            return {"accepted": False, "reason": edge.reason, "edge": edge.model_dump(), **extras}
 
         notional = size_notional(
             edge,
@@ -647,7 +670,12 @@ class PaperPipeline:
                 net_edge=edge.net_expected_edge,
                 opportunity_score=opp.score,
             )
-            return {"accepted": False, "reason": decision.reason, "detail": decision.detail}
+            return {
+                "accepted": False,
+                "reason": decision.reason,
+                "detail": decision.detail,
+                **extras,
+            }
 
         quality = signal_quality(
             opp,
@@ -675,7 +703,7 @@ class PaperPipeline:
                 hms=hms.score,
                 net_edge=edge.net_expected_edge,
                 opportunity_score=opp.score,
-                extra={**shadow, "signal": quality},
+                extra={**shadow, "signal": quality, **extras},
             )
             return {
                 "accepted": False,
@@ -686,6 +714,7 @@ class PaperPipeline:
                 "shares": shares,
                 "style": style.value,
                 **shadow,
+                **extras,
             }
 
         if self.config.is_backtest:

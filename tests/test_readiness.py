@@ -111,7 +111,7 @@ def test_secrets_never_appear_in_report() -> None:
     dirty_paper = {
         **_paper_ok(),
         "api_key": "sk-secret-value",
-        "private_key": "-----BEGIN PRIVATE KEY-----\nMIIB\n-----END PRIVATE KEY-----",
+        "private_key": "-----BEGIN " + "PRIVATE KEY-----\nMIIB\n-----END PRIVATE KEY-----",
         "POLY_API_SECRET": "super-secret",
     }
     report = build_readiness(

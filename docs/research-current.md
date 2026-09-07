@@ -410,6 +410,23 @@ The longer pytest stream `crypto_longer_synthetic.json` is labeled
 
 ---
 
+## 2b. News / event engine (no live news API)
+
+There is **no official Polymarket news WebSocket** and this pass does not
+add a scrape of paywalled or social sources. `hotflow news-fixtures` uses
+**labeled Python fixtures** (`origin=fixture`). `--fetch-public` is
+default-off and returns `news_scrape_not_implemented` rather than inventing
+headlines.
+
+Kimi `NEWS_CLASSIFIER` exists only on the cold path (same Moonshot Chat
+Completions surface as other roles). The evaluate hot path never calls it.
+
+Impact features that may adjust `p_info` must already be present on the
+`NewsItem` (`claimed_p_shift` / `claimed_p_after`). They are not estimated
+from raw text on the hot path.
+
+---
+
 ## 3. What we deliberately do **not** invent
 
 - Extra CLOB/Gamma paths beyond those listed above  
@@ -420,3 +437,5 @@ The longer pytest stream `crypto_longer_synthetic.json` is labeled
 - A Polymarket weather observation API or unofficial weather station  
 - Sports leagues, odds, or period/status values outside the official Sports WS schema  
 - One probabilistic sports model reused across football / basketball / tennis / soccer
+- Live news headlines, source pages, or implied price moves
+- A required news crawl or paywalled feed

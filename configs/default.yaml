@@ -213,6 +213,18 @@ recorder:
 tuner:
   auto_apply: false
 
+# PAPER news overlay. Labeled fixtures / injected items only.
+# Never BUY/SELL from news. Public fetch stays off (no scrape in this pass).
+news:
+  enabled: true
+  min_source_authority: 0.5
+  min_confidence: 0.35
+  min_relevance: 0.4
+  already_repriced_abs: 0.02
+  max_p_shift: 0.15
+  recency_half_life_s: 3600.0
+  public_fetch: false
+
 storage:
   sqlite_path: data/hotflow.sqlite
   parquet_dir: data/parquet

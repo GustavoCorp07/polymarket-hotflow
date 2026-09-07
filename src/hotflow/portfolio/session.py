@@ -42,6 +42,8 @@ class PaperSession:
         use_twap_fixtures: bool = False,
         cache_path: str | None = None,
         sports_cache_path: str | None = None,
+        use_news_fixtures: bool = False,
+        news_engine: Any | None = None,
     ) -> None:
         self.config = config
         self.obs = obs or Observability.from_config(config, announce_restart=False)
@@ -57,6 +59,8 @@ class PaperSession:
             sports_cache_path=sports_cache_path,
             obs=self.obs,
             ledger=self.ledger,
+            news_engine=news_engine,
+            use_news_fixtures=use_news_fixtures,
         )
         self.marks: dict[str, float] = {}
         self.cycle_summaries: list[dict[str, Any]] = []

@@ -171,6 +171,19 @@ class TunerConfig(BaseModel):
     auto_apply: bool = False
 
 
+class NewsEngineConfig(BaseModel):
+    """PAPER news overlay. Impact features only; public fetch default-off."""
+
+    enabled: bool = True
+    min_source_authority: float = 0.5
+    min_confidence: float = 0.35
+    min_relevance: float = 0.4
+    already_repriced_abs: float = 0.02
+    max_p_shift: float = 0.15
+    recency_half_life_s: float = 3_600.0
+    public_fetch: bool = False
+
+
 class FairValueConfig(BaseModel):
     latency_haircut: float = 0.0015
     adverse_selection_haircut: float = 0.0020
@@ -339,6 +352,7 @@ class HotflowConfig(BaseModel):
     backtest: BacktestEngineConfig = Field(default_factory=BacktestEngineConfig)
     recorder: RecorderConfig = Field(default_factory=RecorderConfig)
     tuner: TunerConfig = Field(default_factory=TunerConfig)
+    news: NewsEngineConfig = Field(default_factory=NewsEngineConfig)
 
     @property
     def is_paper(self) -> bool:

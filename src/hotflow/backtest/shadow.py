@@ -147,6 +147,8 @@ class ShadowSession:
         use_twap_fixtures: bool = True,
         cache_path: str | None = None,
         sports_cache_path: str | None = None,
+        use_news_fixtures: bool = False,
+        news_engine: Any | None = None,
     ) -> None:
         config.trading.mode = "shadow"
         config.trading.shadow = True
@@ -158,6 +160,8 @@ class ShadowSession:
             cache_path=cache_path,
             sports_cache_path=sports_cache_path,
             obs=self.obs,
+            news_engine=news_engine,
+            use_news_fixtures=use_news_fixtures,
         )
         self.cycles: list[list[dict[str, Any]]] = []
         self.cycle_marks: list[dict[str, float]] = []

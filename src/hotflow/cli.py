@@ -147,6 +147,9 @@ def paper_run(
     ),
     kill_drill: bool = typer.Option(False, "--kill-drill", help="Paper kill-switch trip + recovery drill"),
     acknowledge: str = typer.Option("", "--acknowledge", help="Required text to clear a tripped kill switch"),
+    news_fixtures: bool = typer.Option(
+        False, "--news-fixtures", help="Attach labeled news fixtures (PAPER impact features only)"
+    ),
 ) -> None:
     """One or more paper cycles. Default mode is paper. LIVE is not started here."""
     from hotflow.portfolio.session import PaperSession, mock_markets, run_kill_recovery_drill
@@ -165,10 +168,16 @@ def paper_run(
         use_twap_fixtures=mock,
         cache_path=str(twap_cache) if twap_cache else None,
         sports_cache_path=str(sports_cache) if sports_cache else None,
+        use_news_fixtures=news_fixtures,
     )
     for _cycle in range(max(1, cycles)):
         if mock:
-            session.run_markets(mock_markets())
+            markets = mock_markets()
+            if news_fixtures:
+                from hotflow.pipeline import demo_market
+
+                markets = [demo_market(hot=True), *markets]
+            session.run_markets(markets)
         else:
             scanned = asyncio.run(
                 session.pipe.run_scan(
@@ -321,6 +330,106 @@ def esports_fixtures_cmd(
     )
 
 
+@app.command("news-fixtures")
+def news_fixtures_cmd(
+    config: Path | None = typer.Option(None, "--config", "-c"),
+    out: Path | None = typer.Option(None, "--out"),
+    fetch_public: bool = typer.Option(
+        False, "--fetch-public", help="Default-off. Live news scrape is not implemented."
+    ),
+    shadow: bool = typer.Option(False, "--shadow", help="Also score would_* after news-adjusted FV"),
+) -> None:
+    """Run labeled news fixtures through classify → validate → impact. No orders."""
+    from hotflow.monitoring.redact import redact
+    from hotflow.news.engine import NewsEngine, classify
+    from hotflow.news.fixtures import labeled_news_items, public_fetch_status
+
+    cfg = load_config(config)
+    if cfg.trading.mode.lower() == "live":
+        raise typer.BadParameter("news-fixtures refuses LIVE mode")
+    cfg = _prepare_mock_config(cfg)
+    engine = NewsEngine(cfg.news)
+    items = labeled_news_items()
+    engine.ingest_many(items)
+    market = demo_market(hot=True)
+    rows: list[dict[str, Any]] = []
+    engine.reset_seen()
+    for item in items:
+        bound = market
+        if item.market_id == "demo-btc-repriced":
+            bound = demo_market(hot=True)
+            bound.market_id = "demo-btc-repriced"
+            if bound.book is not None:
+                from hotflow.types import BookLevel
+
+                bound.book.asks = [BookLevel(price=0.71, size=80.0)]
+                bound.book.bids = [BookLevel(price=0.69, size=90.0)]
+            bound.best_ask = 0.71
+            bound.best_bid = 0.69
+        elif item.market_id == "demo-btc-news-edge":
+            bound = demo_market(hot=True)
+            bound.market_id = "demo-btc-news-edge"
+        impact = engine.evaluate_item(item, bound, p_base=0.55)
+        rows.append(
+            {
+                "news_id": item.news_id,
+                "classification": classify(item).value,
+                "impact": impact.as_dict(),
+                "orders": False,
+            }
+        )
+    paper = PaperPipeline(cfg, use_twap_fixtures=True, news_engine=NewsEngine(cfg.news))
+    paper.news.ingest_many(
+        [item for item in items if item.news_id == "btc-sec-filing"],
+    )
+    paper_result = paper.evaluate_market(demo_market(hot=True), p_info=0.55)
+    shadow_row: dict[str, Any] | None = None
+    if shadow:
+        cfg.trading.mode = "shadow"
+        cfg.trading.shadow = True
+        sh = PaperPipeline(cfg, use_twap_fixtures=True, news_engine=NewsEngine(cfg.news))
+        sh.news.ingest_many([item for item in items if item.news_id == "btc-sec-filing"])
+        shadow_row = sh.evaluate_market(demo_market(hot=True), p_info=0.55)
+    payload = redact(
+        {
+            "mode": "paper",
+            "origin": "labeled_fixtures",
+            "public_fetch": public_fetch_status(enabled=fetch_public or cfg.news.public_fetch),
+            "rows": rows,
+            "paper_evaluate": {
+                "accepted": paper_result.get("accepted"),
+                "reason": paper_result.get("reason"),
+                "news": paper_result.get("news"),
+                "p_fair": (paper_result.get("edge") or {}).get("p_fair")
+                if isinstance(paper_result.get("edge"), dict)
+                else None,
+            },
+            "shadow_evaluate": None
+            if shadow_row is None
+            else {
+                "would_buy": shadow_row.get("would_buy"),
+                "would_sell": shadow_row.get("would_sell"),
+                "sent": False,
+                "news": shadow_row.get("news"),
+                "reason": shadow_row.get("reason"),
+            },
+            "news_to_order": False,
+            "note": "News adjusts p_info/confidence only. Risk and min-edge still apply.",
+        }
+    )
+    if not isinstance(payload, dict):
+        raise RuntimeError("redact must return a mapping")
+    report_path = out or Path(cfg.storage.reports_dir) / (
+        f"news-fixtures-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}.json"
+    )
+    write_report(report_path, payload)
+    applied = sum(1 for row in rows if (row.get("impact") or {}).get("apply"))
+    typer.echo(
+        f"news-fixtures items={len(rows)} applied={applied} "
+        f"paper_accepted={paper_result.get('accepted')} live=false report={report_path}"
+    )
+
+
 @app.command()
 def backtest(
     fixture: Path = typer.Option(..., "--fixture", "-f", help="Recorded event-stream JSON"),
@@ -358,6 +467,9 @@ def shadow(
         False, "--compare-paper", help="Same-fixture paper fills vs shadow would_* (no live-edge claim)"
     ),
     stale_probe: bool = typer.Option(False, "--stale-probe", help="Age a fixture book and assert STALE skip"),
+    news_fixtures: bool = typer.Option(
+        False, "--news-fixtures", help="Attach labeled news fixtures; would_* after news-adjusted FV"
+    ),
 ) -> None:
     """Score would_buy / would_sell on real-shaped data. Never sends orders."""
     from hotflow.backtest.shadow import ShadowSession, compare_shadow_vs_paper, run_stale_probe
@@ -372,8 +484,10 @@ def shadow(
     cfg.trading.shadow = True
     cfg = _prepare_mock_config(cfg)
     obs = _observability(cfg, serve=serve_metrics)
-    session = ShadowSession(cfg, obs=obs, use_twap_fixtures=True)
+    session = ShadowSession(cfg, obs=obs, use_twap_fixtures=True, use_news_fixtures=news_fixtures)
     markets = mock_markets()
+    if news_fixtures:
+        markets = [demo_market(hot=True), *markets]
     for _cycle in range(max(1, cycles)):
         session.run_cycle(markets)
     if stale_probe:

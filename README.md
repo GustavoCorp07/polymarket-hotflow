@@ -56,6 +56,7 @@ hotflow shadow-soak --cycles 5
 hotflow failure-soak
 hotflow live-gates
 hotflow readiness
+hotflow news-fixtures
 hotflow paper-run --mock --cycles 3 --flatten
 hotflow paper-soak --cycles 5
 
@@ -118,7 +119,10 @@ GitHub Actions runs lint, typecheck, pytest, and a mock paper-run smoke.
 
 ## Package layout
 
-`src/hotflow/{discovery,marketdata,hotmarket,features,fairvalue,strategies,risk,execution,portfolio,storage,analytics,ai_research,monitoring}`
+`src/hotflow/{discovery,marketdata,hotmarket,features,fairvalue,news,strategies,risk,execution,portfolio,storage,analytics,ai_research,monitoring}`
+
+News (Parte 15) is fixture-only on the hot path: classify → validate →
+impact features → existing FV/risk. It never becomes BUY/SELL.
 
 Weather and sports PAPER adapters parse resolution rules before trading.
 Forecasts never replace the official weather source. Sports uses official WS

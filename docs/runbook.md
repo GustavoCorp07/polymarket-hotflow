@@ -6,6 +6,7 @@
 pip install -e ".[dev]"
 hotflow paper-run --mock    # TWAP + Chicago + Gamma weather texts + NBA, PAPER only
 hotflow weather-fixtures    # public Gamma weather-tag text → tests/fixtures/weather/
+hotflow news-fixtures       # labeled news → classify/validate/impact (no orders)
 hotflow esports-fixtures    # public Gamma esports-tag text → tests/fixtures/esports/
 hotflow rtds-cache --mock   # write official-shape cache (no socket)
 hotflow paper-run --twap-cache data/rtds_twap_cache.json --mock
@@ -21,7 +22,10 @@ hotflow shadow-soak --cycles 5
 hotflow failure-soak
 hotflow live-gates
 hotflow readiness
-pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py tests/test_weather_gamma_fixtures.py tests/test_esports.py tests/test_sports_cache.py tests/test_backtest.py tests/test_recorder.py tests/test_tuner.py tests/test_observability.py tests/test_paper_ledger.py tests/test_paper_gates.py tests/test_shadow_gates.py tests/test_failure_injection.py tests/test_live_gates.py tests/test_security_hygiene.py tests/test_readiness.py
+hotflow news-fixtures
+hotflow paper-run --mock --news-fixtures
+hotflow shadow --mock --news-fixtures
+pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py tests/test_weather_gamma_fixtures.py tests/test_esports.py tests/test_sports_cache.py tests/test_backtest.py tests/test_recorder.py tests/test_tuner.py tests/test_observability.py tests/test_paper_ledger.py tests/test_paper_gates.py tests/test_shadow_gates.py tests/test_failure_injection.py tests/test_live_gates.py tests/test_security_hygiene.py tests/test_readiness.py tests/test_news_engine.py
 pytest -q
 ```
 
@@ -155,6 +159,19 @@ raise in PAPER and still refuse if flags are forced open.
 | Wallet / EIP-712 / HMAC signing | Blocked (not implemented) |
 | `accept_*` + `HOTFLOW_ACCEPT_LIVE` | **Must stay false / 0** |
 | Zero critical bugs + billing-unlocked CI | Blocked |
+
+## News fixtures (PAPER)
+
+```bash
+hotflow news-fixtures
+hotflow news-fixtures --shadow
+# or: python scripts/news_fixtures.py
+hotflow paper-run --mock --news-fixtures
+hotflow shadow --mock --news-fixtures
+```
+
+News is classify → validate → impact features → existing FV/risk.
+It never places an order. `--fetch-public` stays off and does not scrape.
 
 ## Readiness rollup
 
