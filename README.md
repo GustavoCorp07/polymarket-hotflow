@@ -13,7 +13,8 @@ Official endpoints and fee/tick/min-size fields: [`docs/research-current.md`](do
 Architecture: [`docs/architecture.md`](docs/architecture.md). Also
 [`docs/strategy.md`](docs/strategy.md), [`docs/risk.md`](docs/risk.md),
 [`docs/security.md`](docs/security.md), [`docs/runbook.md`](docs/runbook.md),
-[`docs/deployment.md`](docs/deployment.md).
+[`docs/deployment.md`](docs/deployment.md),
+[`docs/github-pages.md`](docs/github-pages.md).
 
 ## Safety rules
 
@@ -74,6 +75,13 @@ hotflow paper-run --mock --dashboard
 hotflow serve-metrics                    # same UI on :9108 plus /metrics
 # scrape http://127.0.0.1:9108/metrics  /health  /ready
 ```
+
+**Static paper dashboard (GitHub Pages):**
+[https://GustavoCorp07.github.io/polymarket-hotflow/](https://GustavoCorp07.github.io/polymarket-hotflow/)
+— committed `paper-run --mock` snapshots, no live Python/SSE. See
+[`docs/pages/README.md`](docs/pages/README.md) and
+[`docs/github-pages.md`](docs/github-pages.md). For a live local ledger use
+`hotflow dashboard`.
 
 See [`dashboards/README.md`](dashboards/README.md) and [`docs/ci.md`](docs/ci.md).
 

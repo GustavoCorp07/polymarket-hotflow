@@ -15,6 +15,10 @@ Optional localhost metrics + paper UI (`hotflow dashboard`, port 9109;
 `hotflow serve-metrics`, port 9108): `/`, `/api/state`, `/events`, `/metrics`,
 `/health`, `/ready`. Default-off. Bind `127.0.0.1`. Not a venue API.
 
+Public static demo (GitHub Pages, no Actions deploy):
+[https://GustavoCorp07.github.io/polymarket-hotflow/](https://GustavoCorp07.github.io/polymarket-hotflow/).
+See [`github-pages.md`](github-pages.md). Keep the repo public.
+
 LIVE deploy is a **release gate**, not a compose default. Do not put credentials
 in images or git. Promote only after paper → shadow → human review
 (Parte 29 / 59).

@@ -19,6 +19,12 @@ hotflow dashboard --idle
 
 Open **http://127.0.0.1:9109/** in a browser.
 
+Static GitHub Pages demo (no Python, no SSE — poll + rotating mock snapshots):
+**https://GustavoCorp07.github.io/polymarket-hotflow/**. Source tree
+[`docs/pages/`](../docs/pages/README.md). Publish notes:
+[`docs/github-pages.md`](../docs/github-pages.md). Live local ledger is still
+`hotflow dashboard`.
+
 The same server keeps Prometheus scrape and probes:
 
 | Path | Role |

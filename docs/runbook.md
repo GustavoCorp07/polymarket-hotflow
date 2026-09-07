@@ -33,7 +33,8 @@ hotflow walk-forward --report reports/paper-soak-long-*.json
 hotflow skip-audit
 hotflow dashboard --mock
 make ci
-pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py tests/test_weather_gamma_fixtures.py tests/test_esports.py tests/test_sports_cache.py tests/test_backtest.py tests/test_recorder.py tests/test_tuner.py tests/test_observability.py tests/test_paper_ledger.py tests/test_paper_gates.py tests/test_shadow_gates.py tests/test_failure_injection.py tests/test_live_gates.py tests/test_security_hygiene.py tests/test_readiness.py tests/test_news_engine.py tests/test_performance.py tests/test_paper_long_soak.py tests/test_mixed_paper_soak.py tests/test_mixed_walkforward.py tests/test_walkforward.py tests/test_microstructure.py tests/test_signal_quality.py tests/test_dashboard.py
+# static Pages demo: docs/pages/  →  https://GustavoCorp07.github.io/polymarket-hotflow/
+pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py tests/test_weather_gamma_fixtures.py tests/test_esports.py tests/test_sports_cache.py tests/test_backtest.py tests/test_recorder.py tests/test_tuner.py tests/test_observability.py tests/test_paper_ledger.py tests/test_paper_gates.py tests/test_shadow_gates.py tests/test_failure_injection.py tests/test_live_gates.py tests/test_security_hygiene.py tests/test_readiness.py tests/test_news_engine.py tests/test_performance.py tests/test_paper_long_soak.py tests/test_mixed_paper_soak.py tests/test_mixed_walkforward.py tests/test_walkforward.py tests/test_microstructure.py tests/test_signal_quality.py tests/test_dashboard.py tests/test_pages_demo.py
 pytest -q
 ```
 
@@ -335,7 +336,8 @@ material in alerts.**
 `/ready` is 503 when the kill switch is tripped or `trading.mode` is `live`.
 `/health` stays 200 while the process is up.
 
-Grafana: see `dashboards/README.md` (scrape notes only; no shipped dashboard).
+Grafana: see `dashboards/README.md`. Built-in localhost UI: `hotflow dashboard`.
+Static GitHub Pages demo: [`docs/github-pages.md`](github-pages.md).
 
 ## Kill switch recovery
 
