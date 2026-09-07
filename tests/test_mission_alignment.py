@@ -34,6 +34,8 @@ def test_microstructure_and_watchlist() -> None:
     feats = microstructure_features(market)
     assert feats["mid"] is not None
     assert feats["microprice"] is not None
+    assert feats["weighted_imbalance"] is not None
+    assert feats["spread_regime"]["invented"] is False
     assert resource_plan(ResourceTier.ULTRA_HOT) == "highest_frequency"
     assert resource_plan(ResourceTier.COLD) == "metadata_only"
 

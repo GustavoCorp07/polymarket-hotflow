@@ -102,6 +102,7 @@ class EventDrivenBacktester:
         book: OrderBook | None = template.book
         gap = False
         last_trade: float | None = None
+        micro_events: list[dict[str, Any]] = []
         token_id = template.token_ids[0] if template.token_ids else "unknown"
         decisions: list[dict[str, Any]] = []
         trades: list[dict[str, Any]] = []
@@ -134,6 +135,8 @@ class EventDrivenBacktester:
                 avg_entry = 0.0
                 equity.append(starting + realized)
                 continue
+            if event.kind in {"book", "trade"}:
+                micro_events.append({"ts": event.ts, "kind": event.kind, "payload": event.payload})
             if event.kind != "decision":
                 continue
             if gap:
@@ -153,6 +156,7 @@ class EventDrivenBacktester:
                 latency_ms=self.assumptions.latency_ms,
                 p_info=event.payload.get("p_info"),
                 now=event.ts,
+                micro_events=micro_events,
             )
             reason = str(result.get("reason") or ReasonCode.NO_TRADE)
             accepted = bool(result.get("accepted") and result.get("backtest_intent"))

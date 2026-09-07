@@ -313,6 +313,21 @@ news:
   recency_half_life_s: 3600.0
   public_fetch: false
 
+# Parte 45 — L2 book features. Intensity is N/A on a single snapshot.
+microstructure:
+  depth_levels: 5
+  imbalance_decay: 0.70          # weight_i = decay^i (0 = touch)
+  gap_multiple: 2.0              # gap if adjacent Δp >= tick * multiple
+  impact_notional: 50.0          # VWAP-to-depth probe (probability points * size)
+  spread_tight: 0.015
+  spread_wide: 0.060
+  recent_tight_frac: 0.70        # vs recent median when history exists
+  recent_wide_frac: 1.40
+  min_history: 3                 # else vs=config, invented:false
+  intensity_window_s: 60.0
+  min_top_depth: 0.0             # 0 = do not add a new LOW_LIQUIDITY veto
+  max_impact: null               # null = do not add a new SLIPPAGE veto
+
 storage:
   sqlite_path: data/hotflow.sqlite
   parquet_dir: data/parquet

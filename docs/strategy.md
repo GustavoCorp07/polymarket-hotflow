@@ -118,10 +118,41 @@ SHADOW scores the same path and records `would_buy` / `would_sell` /
 sending orders (`sent=false`). Stale / `MAX_DATA_AGE` skips have no `would_*`
 intent. `hotflow shadow-soak` writes a multi-cycle report.
 
+## Market microstructure (Parte 45)
+
+Features come from a CLOB L2 snapshot (fixtures or public book). Each one has
+an economic hypothesis in `hotflow.features.microstructure`. Paper evaluate
+attaches `extras.microstructure` and a compact copy on Parte 46
+`signal_quality`. SQLite feature rows persist the same extras — no Postgres.
+
+| Feature | Hypothesis (short) |
+| --- | --- |
+| mid / spread | Immediate round-trip cost; wide books raise adverse-selection risk |
+| microprice | Size-weighted mid sits toward the thinner side |
+| L1 imbalance | Touch size pressure; positive = bid-heavy |
+| weighted imbalance | Deeper decaying size is stabler than fleeting L1 |
+| top-N depth | Thin displayed size raises walk-the-book cost |
+| book slope | `cum_size(N) / \|p_N − mid\|` — contracts per price point of walk |
+| depth convexity | `(far − near) / (far + near)` after splitting first N levels |
+| liquidity gaps | Adjacent Δp ≥ tick × `gap_multiple` — holes understate touch spread |
+| VWAP-to-depth | Probe notional walk; impact vs mid; exhausted if the book cannot fill |
+| spread regime | `tight` / `normal` / `wide` vs YAML or recent median; never invented |
+
+**N/A (no fixture data):** order-flow imbalance, signed trade imbalance, cancel
+imbalance, book replenishment. Quote/trade intensity is computed only when a
+timestamped book/trade event list is passed (backtest replay). A single
+snapshot stays `invented: false` with those keys in `not_available`.
+
+Basic filter and risk use book spread when Gamma `spread` is missing. Optional
+`microstructure.min_top_depth` / `max_impact` can add LOW_LIQUIDITY /
+SLIPPAGE_TOO_HIGH vetoes; both default off so existing paper fills do not
+change. Risk VETO remains absolute.
+
 ## Signal contract (Parte 46)
 
 Every decision persists `signal_quality`: fair probability, costs, half-life,
-HMS, opportunity, style, `TRADE|SKIP`, reason codes.
+HMS, opportunity, style, `TRADE|SKIP`, reason codes, plus compact
+microstructure extras when a book exists.
 
 ## Sizing (Parte 22)
 
