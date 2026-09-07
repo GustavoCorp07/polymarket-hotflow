@@ -586,6 +586,30 @@ def failure_soak(
     )
 
 
+@app.command("live-gates")
+def live_gates_cmd(
+    config: Path | None = typer.Option(None, "--config", "-c"),
+    out: Path | None = typer.Option(None, "--out"),
+) -> None:
+    """Print LIVE acceptance gates. Exits 1 if any gate is unexpectedly open. No transmit."""
+    from hotflow.execution.live_gate import inspect_live_gates
+
+    cfg = load_config(config)
+    report = inspect_live_gates(cfg)
+    for gate in report.gates:
+        state = "OPEN" if gate.open else "CLOSED"
+        typer.echo(f"{gate.id}={state} detail={gate.detail}")
+    typer.echo(
+        f"live_gates_open={report.live_gates_open} freeze_ok={report.freeze_ok} "
+        f"signing_implemented={report.signing_implemented} mode={report.mode}"
+    )
+    if out is not None:
+        write_report(out, report.as_dict())
+        typer.echo(f"report={out}")
+    if not report.freeze_ok:
+        raise typer.Exit(code=1)
+
+
 @app.command()
 def version() -> None:
     from hotflow import __version__

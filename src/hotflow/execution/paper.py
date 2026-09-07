@@ -1,4 +1,7 @@
-"""Paper broker: partial fills, idempotency, never infers fills from the book."""
+"""Paper broker: partial fills, idempotency, never infers fills from the book.
+
+LIVE transmit is `LiveExecutor` and refuses here. This module never signs.
+"""
 
 from __future__ import annotations
 

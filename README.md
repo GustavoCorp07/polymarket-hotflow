@@ -54,6 +54,7 @@ hotflow tune --report reports/backtest-*.json --write-suggestion reports/tune-su
 hotflow shadow --mock
 hotflow shadow-soak --cycles 5
 hotflow failure-soak
+hotflow live-gates
 hotflow paper-run --mock --cycles 3 --flatten
 hotflow paper-soak --cycles 5
 
@@ -101,6 +102,8 @@ LIVE is a no-op unless:
 | `HOTFLOW_ACCEPT_LIVE` | `1` |
 
 Missing any gate keeps transmit closed. Paper remains the supported path.
+`hotflow live-gates` prints each gate and exits 1 if any is unexpectedly open.
+Signing is **not implemented**; `place_order` / `cancel_order` refuse.
 
 ## Tests and CI
 

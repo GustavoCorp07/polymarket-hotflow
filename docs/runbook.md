@@ -19,7 +19,8 @@ hotflow tune --report reports/backtest-*.json --write-suggestion reports/tune-su
 hotflow shadow --mock
 hotflow shadow-soak --cycles 5
 hotflow failure-soak
-pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py tests/test_weather_gamma_fixtures.py tests/test_esports.py tests/test_sports_cache.py tests/test_backtest.py tests/test_recorder.py tests/test_tuner.py tests/test_observability.py tests/test_paper_ledger.py tests/test_paper_gates.py tests/test_shadow_gates.py tests/test_failure_injection.py
+hotflow live-gates
+pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py tests/test_weather_gamma_fixtures.py tests/test_esports.py tests/test_sports_cache.py tests/test_backtest.py tests/test_recorder.py tests/test_tuner.py tests/test_observability.py tests/test_paper_ledger.py tests/test_paper_gates.py tests/test_shadow_gates.py tests/test_failure_injection.py tests/test_live_gates.py tests/test_security_hygiene.py
 pytest -q
 ```
 
@@ -130,10 +131,31 @@ Each case must **fail safe**: skip or kill-switch, `would_*=false`, zero new
 order submits. The report lists `live_prep_still_blocked` (signing, LIVE gates,
 venue reconcile, real-socket inject).
 
-## LIVE
+## LIVE (frozen closed)
 
-Do not enable until Parte 59 LIVE gates: shadow consistency, failure injection,
-reconciled accounting, isolated secrets, tested kill switch. Then all of:
+```bash
+hotflow live-gates                 # exit 0 only when every acceptance gate is CLOSED
+```
+
+Do **not** enable LIVE in this pass. Signing / CLOB transmit is not implemented.
+`LiveExecutor.place_order` / `cancel_order` / `get_positions` / `get_orders`
+raise in PAPER and still refuse if flags are forced open.
+
+### Parte 59 LIVE readiness
+
+| Item | Status |
+| --- | --- |
+| Paper stable (accounting + kill drill) | Done (`hotflow paper-soak`) |
+| Shadow consistent (complete would_*, stale skip) | Done (`hotflow shadow-soak`) |
+| Failure injection (mocked) | Done (`hotflow failure-soak`) |
+| Risk / kill switch | Done (paper + failure soak) |
+| Secrets isolated | This pass (`hotflow live-gates`, `.env.example` placeholders, redaction) |
+| Accounting reconciled vs **venue** | Blocked (paper ledger only) |
+| Wallet / EIP-712 / HMAC signing | Blocked (not implemented) |
+| `accept_*` + `HOTFLOW_ACCEPT_LIVE` | **Must stay false / 0** |
+| Zero critical bugs + billing-unlocked CI | Blocked |
+
+When (later) those are truly ready, LIVE still needs **all** of:
 
 - `trading.mode: live`
 - `live.accept_*` flags true

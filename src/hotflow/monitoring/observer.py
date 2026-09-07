@@ -40,7 +40,12 @@ class Observability:
         self.mon: MonitoringConfig = self.config.monitoring
         self.metrics = metrics or MetricsRegistry()
         self.logger = logger or JsonLogger()
-        self.health = HealthState(mode=self.config.trading.mode)
+        from hotflow.execution.live_gate import live_gates_open
+
+        self.health = HealthState(
+            mode=self.config.trading.mode,
+            live_gates_open=live_gates_open(self.config),
+        )
         self.alerts = alerts or AlertRouter(self.logger, on_emit=self._on_alert)
         self._http: ThreadingHTTPServer | None = None
         self._drawdown_alerted = False

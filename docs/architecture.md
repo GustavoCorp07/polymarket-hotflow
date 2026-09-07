@@ -85,6 +85,8 @@ LIVE is blocked unless **all** of the following are true:
 7. Credentials present (never logged)
 
 Any missing gate keeps the process in paper or refuses to start transmit.
+`hotflow live-gates` prints each gate and exits 1 if any is unexpectedly open.
+Signing is not implemented in this pass.
 
 ## Data freshness
 

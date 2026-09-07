@@ -19,8 +19,8 @@ Source of truth: [`MISSION-FULL.md`](MISSION-FULL.md).
 | 28 Modes | backtest / paper / shadow (`hotflow shadow --mock`, `hotflow shadow-soak`) / live |
 | 29–30 Tuner / experiments | Offline tuner (`hotflow tune`) writes suggestions only; refuses abs-PnL and production config writes |
 | 31–36 Storage / obs / alerts | SQLite ledger events/snapshots + JSON logs (request/signal/trade/risk/ledger, redaction) + Prometheus from the paper ledger (equity/PnL/drawdown/win-rate after closed trades) + `/metrics` `/health` `/ready` + alerts. PAPER default. No LIVE. |
-| 37–42 Security / tests / clock / resolution | Hygiene tests + parser + clock-skew skip + `hotflow failure-soak` (Parte 39 injects) |
+| 37–42 Security / tests / clock / resolution | Hygiene + `hotflow live-gates` freeze (accept_* closed, no signing) + clock-skew + failure-soak |
 | 43–47 Watchlist / filter / micro / audit | Implemented |
 | 48–51 Skills / watch routine | Scripts; no auto prod change |
 | 52–53 Performance / decay | Not yet (needs trade history) |
-| 54–64 Preservation / repo / CI / phases | Docs + paper/shadow soaks + failure injection (`hotflow failure-soak`); LIVE still gated |
+| 54–64 Preservation / repo / CI / phases | Docs + paper/shadow/failure soaks + LIVE-gate freeze (`hotflow live-gates`); LIVE still gated |
