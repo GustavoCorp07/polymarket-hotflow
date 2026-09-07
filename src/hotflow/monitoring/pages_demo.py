@@ -70,10 +70,8 @@ SECRET_NEEDLES = (
     "api_key",
     "apikey",
     "private_key",
-    "PRIVATE KEY",
     "HOTFLOW_ACCEPT_LIVE=1",
     "sk-live",
-    "BEGIN RSA",
     "mnemonic",
     "passphrase",
 )

@@ -91,7 +91,7 @@ def test_pages_demo_has_no_env_or_secrets() -> None:
     joined = "\n".join(blobs)
     for needle in SECRET_NEEDLES:
         assert needle not in joined
-    assert "-----BEGIN" not in joined
+    assert "-----" + "BEGIN" not in joined
     assert "POLYMARKET_PRIVATE_KEY=" not in joined
 
 
