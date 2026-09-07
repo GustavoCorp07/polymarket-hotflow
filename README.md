@@ -80,7 +80,7 @@ docker compose up --build
 
 ## Configuration
 
-All tunables live in [`configs/default.yaml`](configs/default.yaml): scanner filters, HMS weights/tiers, opportunity weights, fair-value haircuts, risk limits, per-feed `max_data_age_ms`, category toggles.
+All tunables live in [`configs/default.yaml`](configs/default.yaml): scanner filters, HMS weights/tiers, opportunity weights, fair-value haircuts, risk limits, per-feed `max_data_age_ms`, category toggles, **portfolio correlation groups**.
 
 Copy [`.env.example`](.env.example) to `.env` locally. Leave `HOTFLOW_ACCEPT_LIVE=0`.
 
@@ -90,8 +90,9 @@ Copy [`.env.example`](.env.example) to `.env` locally. Leave `HOTFLOW_ACCEPT_LIV
 2. **HMS 0–100** — COLD / WARM / HOT / ULTRA-HOT
 3. **Opportunity score** after HMS threshold
 4. **Fair value** — `P(outcome|info)`, RAW_EDGE, NET after fetched fees + spread + slippage + latency + adverse selection. Crypto TWAP markets use the official Chainlink 30s/60s observation when the window/symbol/strike can be parsed; otherwise they skip. Weather/sports parse resolution rules first; low confidence → `DO_NOT_TRADE`. Forecasts are features only. Sports models are per-sport (NBA ≠ Soccer); unsupported sports refuse.
-5. **Risk VETO**
-6. **Paper order state machine** with partial fills and idempotency
+5. **Portfolio allocation** — rank simultaneous hot names by opportunity / risk-adjusted PnL velocity; explicit correlation groups (crypto short-window, weather city, sports game, esports match). Propose TAKE / DOWNSIZE / SKIP (`CORRELATED_EXPOSURE`). Never invents a residual rho.
+6. **Risk VETO** — still absolute after the portfolio proposal
+7. **Paper order state machine** with partial fills and idempotency
 
 Fills are never inferred from a disappearing book level.
 

@@ -199,6 +199,103 @@ class SizingConfig(BaseModel):
     book_frac: float = 0.15
 
 
+class PortfolioRankConfig(BaseModel):
+    """Weights for ranking simultaneous candidates. Velocity is never used alone."""
+
+    opportunity: float = 1.0
+    pnl_velocity: float = 1.0
+    net_edge: float = 0.5
+    liquidity: float = 0.25
+
+
+class PortfolioRulesConfig(BaseModel):
+    """Explicit correlation switches. No estimated residual / price-implied rho."""
+
+    same_underlying: bool = True
+    same_category_window: bool = True
+    tag_overlap: bool = True
+    yaml_groups: bool = True
+
+
+class CorrelationGroupConfig(BaseModel):
+    """Named exposure bucket. Membership is rule-based, never inferred from prints."""
+
+    id: str
+    assumption: str
+    category: str | None = None
+    windows: list[str] = Field(default_factory=list)
+    underlyings: list[str] = Field(default_factory=list)
+    tags_any: list[str] = Field(default_factory=list)
+    key: str | None = None  # city | game | match — buckets by that identity field
+    max_exposure: float | None = None  # default: risk.max_correlated_exposure
+    max_markets: int = 1
+
+
+class PortfolioRegimeConfig(BaseModel):
+    """Optional fixture-labeled overlay. Applied only when the label is present."""
+
+    id: str
+    assumption: str
+    group_scales: dict[str, float] = Field(default_factory=dict)
+
+
+class PortfolioConfig(BaseModel):
+    """Parte 24 — propose sizes/selection. Risk VETO remains absolute."""
+
+    enabled: bool = True
+    rank: PortfolioRankConfig = Field(default_factory=PortfolioRankConfig)
+    min_allocate_fraction: float = 0.25
+    tag_overlap_min: int = 2
+    generic_tags: list[str] = Field(
+        default_factory=lambda: ["crypto", "weather", "sports", "esports", "other"]
+    )
+    rules: PortfolioRulesConfig = Field(default_factory=PortfolioRulesConfig)
+    groups: list[CorrelationGroupConfig] = Field(
+        default_factory=lambda: [
+            CorrelationGroupConfig(
+                id="crypto_short_window",
+                assumption=(
+                    "Short-window crypto Up/Down (5m/15m and official 30s/60s TWAP) "
+                    "can be the same macro bet across BTC/ETH/SOL. Not a measured rho."
+                ),
+                category="crypto",
+                windows=["5m", "15m", "30s", "60s"],
+                max_markets=1,
+            ),
+            CorrelationGroupConfig(
+                id="weather_city",
+                assumption="Same-city weather contracts share the official observation.",
+                category="weather",
+                key="city",
+                max_markets=1,
+            ),
+            CorrelationGroupConfig(
+                id="sports_game",
+                assumption="Contracts on the same parsed game share the sports outcome.",
+                category="sports",
+                key="game",
+                max_markets=1,
+            ),
+            CorrelationGroupConfig(
+                id="esports_match",
+                assumption="Contracts on the same parsed match share the esports outcome.",
+                category="esports",
+                key="match",
+                max_markets=1,
+            ),
+        ]
+    )
+    regimes: list[PortfolioRegimeConfig] = Field(
+        default_factory=lambda: [
+            PortfolioRegimeConfig(
+                id="news_shock",
+                assumption="Fixture-labeled news-shock: tighten short-window crypto cap.",
+                group_scales={"crypto_short_window": 0.5},
+            )
+        ]
+    )
+
+
 class MakerTakerConfig(BaseModel):
     maker_fill_probability: float = 0.35
     maker_adverse_mult: float = 1.30
@@ -353,6 +450,7 @@ class HotflowConfig(BaseModel):
     recorder: RecorderConfig = Field(default_factory=RecorderConfig)
     tuner: TunerConfig = Field(default_factory=TunerConfig)
     news: NewsEngineConfig = Field(default_factory=NewsEngineConfig)
+    portfolio: PortfolioConfig = Field(default_factory=PortfolioConfig)
 
     @property
     def is_paper(self) -> bool:

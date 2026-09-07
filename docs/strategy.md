@@ -124,3 +124,33 @@ HMS, opportunity, style, `TRADE|SKIP`, reason codes.
 
 Capped fractional Kelly from edge, confidence, liquidity, and hard risk caps.
 No martingale. No auto risk-up after losses.
+
+## Portfolio allocation (Parte 24)
+
+When several markets are hot in the same scan, capital is **not** first-come.
+`evaluate_markets` (paper-run / shadow / `run_scan`) scores the batch, then
+`PortfolioAllocator` ranks by a weighted mix of opportunity score, risk-adjusted
+PnL velocity, net edge, and liquidity. Velocity is never maximized alone.
+
+The allocator **proposes** TAKE / DOWNSIZE / SKIP. Risk VETO remains absolute
+and can still block a TAKE (spread, kill switch, category/total caps, …).
+
+Correlations are never estimated from prints. A pair is linked only when an
+explicit rule fires:
+
+| Rule | When it fires | Documented assumption |
+| --- | --- | --- |
+| Same underlying | Shared official Chainlink symbol or documented alias (`btc/usd`, …) | Same parsed underlying |
+| Same category + window | Both have a parsed window (5m / 15m / 4h / official 30s/60s) | Same category and window can be the same horizon bet |
+| Tag overlap | ≥ `portfolio.tag_overlap_min` tags after dropping generics | Shared specific tags only |
+| YAML group | Named group in `configs/default.yaml` | Group `assumption` string |
+
+Default groups: `crypto_short_window` (5m/15m and official 30s/60s TWAP across
+BTC/ETH/SOL — **not** a measured rho), `weather_city`, `sports_game`,
+`esports_match`. Weather/sports/esports buckets are keyed by parsed city/game/
+match, so Chicago vs London can both pass.
+
+Optional fixture label `raw_gamma.hotflow_regime` (e.g. `news_shock`) may
+**scale** a group's cap. It does not invent a new link. Skip reason:
+`CORRELATED_EXPOSURE`. Partial room: `PORTFOLIO_DOWNSIZED` (still goes to risk).
+Concentration vs open/category/total: `PORTFOLIO_CONCENTRATION`.

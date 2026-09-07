@@ -78,11 +78,9 @@ class PaperSession:
         self.ledger.mark(token, price, market_id=market.market_id)
 
     def run_markets(self, markets: list[MarketRecord]) -> dict[str, Any]:
-        results = []
-        for market in markets:
-            result = self.pipe.evaluate_market(market)
+        results = self.pipe.evaluate_markets(markets)
+        for market, result in zip(markets, results, strict=True):
             self._remember_marks(market, result)
-            results.append(result)
         self.obs.snapshot_pipeline(self.pipe)
         snap = self.ledger.snapshot()
         self.obs.publish_ledger(snap)

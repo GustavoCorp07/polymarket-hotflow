@@ -48,6 +48,8 @@ from hotflow.marketdata.weather_fixtures import (
 )
 from hotflow.monitoring.observer import Observability
 from hotflow.news.engine import NewsEngine
+from hotflow.portfolio.allocator import AllocationCandidate, AllocationDecision, PortfolioAllocator
+from hotflow.portfolio.correlation import ExposureBook, ExposureIdentity, extract_identity
 from hotflow.portfolio.ledger import PaperLedger
 from hotflow.portfolio.sizing import size_notional
 from hotflow.reason_codes import ReasonCode
@@ -192,6 +194,8 @@ class PaperPipeline:
             sports_source=sports_source,
             sports_cache_path=sports_cache_path,
         )
+        self.allocator = PortfolioAllocator(config.portfolio, config.risk)
+        self.exposure = ExposureBook()
         self.news = news_engine if news_engine is not None else NewsEngine(config.news)
         if use_news_fixtures and not self.news.items:
             from hotflow.news.fixtures import labeled_news_items
@@ -219,6 +223,8 @@ class PaperPipeline:
     ) -> dict[str, Any]:
         started = monotonic_ms()
         result = self._evaluate_market(market, latency_ms=latency_ms, p_info=p_info, now=now)
+        if result.get("dry_run"):
+            return result
         category = infer_category(market.tags, market.category)
         peak = self.risk.state.peak_equity
         drawdown = ((peak - self.risk.state.equity) / peak) if peak > 0 else 0.0
@@ -252,6 +258,9 @@ class PaperPipeline:
         latency_ms: float = 50.0,
         p_info: float | None = None,
         now: datetime | None = None,
+        dry_run: bool = False,
+        allocation: AllocationDecision | None = None,
+        enforce_cooldown: bool = True,
     ) -> dict[str, Any]:
         now = now or datetime.now(UTC)
         if latency_ms < 0:
@@ -569,6 +578,7 @@ class PaperPipeline:
         snap.extras.update(extras)
         if twap_snap is not None:
             snap.extras["twap"] = twap_snap.model_dump()
+            extras["twap"] = snap.extras["twap"]
         if self.store:
             self.store.save_feature(market.market_id, snap.model_dump(mode="json"))
 
@@ -648,6 +658,138 @@ class PaperPipeline:
             signal_half_life_ms=half_life,
         )
         age = self.clock.age_ms("clob_book", now) if market.book else self.clock.age_ms("gamma", now)
+        identity = extract_identity(market, category=category)
+        extras["exposure_identity"] = {
+            "underlying": identity.underlying,
+            "window": identity.window,
+            "city": identity.city,
+            "game": identity.game,
+            "match": identity.match,
+            "regime": identity.regime_label,
+            "notes": list(identity.source_notes),
+        }
+        candidate = AllocationCandidate.from_opportunity(
+            opp, market=market, category=category, identity=identity
+        )
+        if dry_run:
+            return {
+                "dry_run": True,
+                "accepted": None,
+                "candidate": candidate,
+                "prepared": {
+                    "market": market,
+                    "category": category,
+                    "edge": edge,
+                    "opp": opp,
+                    "shares": shares,
+                    "style": style,
+                    "ev_maker": ev_maker,
+                    "ev_taker": ev_taker,
+                    "extras": extras,
+                    "hms": hms,
+                    "age": age,
+                    "now": now,
+                    "latency_ms": latency_ms,
+                    "token_id": token_id,
+                    "identity": identity,
+                },
+            }
+        return self._commit_prepared(
+            {
+                "market": market,
+                "category": category,
+                "edge": edge,
+                "opp": opp,
+                "shares": shares,
+                "style": style,
+                "ev_maker": ev_maker,
+                "ev_taker": ev_taker,
+                "extras": extras,
+                "hms": hms,
+                "age": age,
+                "now": now,
+                "latency_ms": latency_ms,
+                "token_id": token_id,
+                "identity": identity,
+            },
+            allocation=allocation,
+            candidate=candidate,
+            enforce_cooldown=enforce_cooldown,
+        )
+
+    def _apply_allocation(
+        self,
+        prepared: dict[str, Any],
+        allocation: AllocationDecision | None,
+        candidate: AllocationCandidate,
+    ) -> tuple[Any, Any, float, AllocationDecision]:
+        market = prepared["market"]
+        edge = prepared["edge"]
+        opp = prepared["opp"]
+        shares = float(prepared["shares"])
+        extras = prepared["extras"]
+        alloc = allocation
+        if alloc is None:
+            allocs = self.allocator.allocate(
+                [candidate],
+                existing=self.exposure.snapshot(),
+                category_exposure=dict(self.risk.state.category_exposure),
+                total_exposure=self.risk.state.total_exposure,
+                concurrent_markets=set(self.risk.state.concurrent_markets),
+            )
+            alloc = allocs[0]
+        extras["portfolio"] = alloc.as_dict()
+        if alloc.action != "SKIP" and alloc.allocated_notional + 1e-9 < opp.intended_notional:
+            price = edge.market_price
+            shares = _intended_shares(market, self.config, alloc.allocated_notional, price)
+            if price > 0:
+                shares = min(shares, self.config.risk.max_order_notional / price)
+            notional = shares * price if price > 0 else alloc.allocated_notional
+            opp = opp.model_copy(update={"intended_shares": shares, "intended_notional": notional})
+        return opp, extras, shares, alloc
+
+    def _commit_prepared(
+        self,
+        prepared: dict[str, Any],
+        *,
+        allocation: AllocationDecision | None = None,
+        candidate: AllocationCandidate | None = None,
+        enforce_cooldown: bool = True,
+    ) -> dict[str, Any]:
+        market: MarketRecord = prepared["market"]
+        category: str = prepared["category"]
+        edge = prepared["edge"]
+        extras: dict[str, Any] = dict(prepared["extras"])
+        hms = prepared["hms"]
+        age = prepared["age"]
+        now = prepared["now"]
+        latency_ms = float(prepared["latency_ms"])
+        style = prepared["style"]
+        identity: ExposureIdentity = prepared["identity"]
+        cand = candidate or AllocationCandidate.from_opportunity(
+            prepared["opp"], market=market, category=category, identity=identity
+        )
+        prepared = {**prepared, "extras": extras}
+        opp, extras, shares, alloc = self._apply_allocation(prepared, allocation, cand)
+        if alloc.action == "SKIP":
+            self._audit(
+                market_id=market.market_id,
+                accepted=False,
+                reason=alloc.reason,
+                detail=alloc.detail,
+                hms=hms.score,
+                net_edge=edge.net_expected_edge,
+                opportunity_score=opp.score,
+                extra={"portfolio": alloc.as_dict(), **extras},
+            )
+            return {
+                "accepted": False,
+                "reason": alloc.reason,
+                "detail": alloc.detail,
+                "portfolio": alloc.as_dict(),
+                **extras,
+            }
+
         decision = self.risk.decide(
             opp,
             category=category,
@@ -656,6 +798,7 @@ class PaperPipeline:
             latency_ms=latency_ms,
             now=now,
             requested_notional=min(opp.intended_notional, self.config.risk.max_order_notional),
+            enforce_cooldown=enforce_cooldown,
         )
         if self.store:
             self.store.save_risk(market.market_id, decision)
@@ -669,18 +812,20 @@ class PaperPipeline:
                 hms=hms.score,
                 net_edge=edge.net_expected_edge,
                 opportunity_score=opp.score,
+                extra={"portfolio": alloc.as_dict(), **extras},
             )
             return {
                 "accepted": False,
                 "reason": decision.reason,
                 "detail": decision.detail,
+                "portfolio": alloc.as_dict(),
                 **extras,
             }
 
         quality = signal_quality(
             opp,
             decision="TRADE" if decision.allowed else "SKIP",
-            reason_codes=[decision.reason],
+            reason_codes=[decision.reason, alloc.reason],
             strategy=self.config.experiment.strategy_id,
         )
         if self.config.is_shadow:
@@ -703,7 +848,7 @@ class PaperPipeline:
                 hms=hms.score,
                 net_edge=edge.net_expected_edge,
                 opportunity_score=opp.score,
-                extra={**shadow, "signal": quality, **extras},
+                extra={**shadow, "signal": quality, "portfolio": alloc.as_dict(), **extras},
             )
             return {
                 "accepted": False,
@@ -713,6 +858,7 @@ class PaperPipeline:
                 "side": opp.side.value,
                 "shares": shares,
                 "style": style.value,
+                "portfolio": alloc.as_dict(),
                 **shadow,
                 **extras,
             }
@@ -726,7 +872,7 @@ class PaperPipeline:
                 tier=hms.tier.value,
                 net_edge=edge.net_expected_edge,
                 opportunity_score=opp.score,
-                extra={"backtest_intent": True, "signal": quality, **extras},
+                extra={"backtest_intent": True, "signal": quality, "portfolio": alloc.as_dict(), **extras},
             )
             return {
                 "accepted": True,
@@ -740,6 +886,7 @@ class PaperPipeline:
                 "shares": shares,
                 "style": style.value,
                 "expected_price": edge.market_price,
+                "portfolio": alloc.as_dict(),
                 **extras,
             }
 
@@ -764,12 +911,14 @@ class PaperPipeline:
         )
         self.risk.state.last_order_at = now
         realized_delta = fill_event.realized_delta if fill_event is not None else 0.0
+        filled_notional = order.filled_size * (order.avg_fill_price or order.price)
         self.risk.note_fill(
             market_id=market.market_id,
             category=category,
-            notional=order.filled_size * (order.avg_fill_price or order.price),
+            notional=filled_notional,
             pnl_delta=realized_delta,
         )
+        self.exposure.add_notional(identity, filled_notional, category=category)
         self.risk.sync_from_ledger(self.ledger.snapshot())
         self.risk.enforce_session_limits()
         if fill_event is not None and fill_event.closed:
@@ -797,7 +946,8 @@ class PaperPipeline:
                 "signal": quality,
                 "git_commit": git_commit(),
                 "strategy_version": self.config.experiment.version,
-                "twap": twap_snap.model_dump() if twap_snap else None,
+                "twap": extras.get("twap"),
+                "portfolio": alloc.as_dict(),
                 **extras,
             },
         )
@@ -808,9 +958,78 @@ class PaperPipeline:
             "question": market.question,
             "order": order.model_dump(mode="json"),
             "edge": edge.model_dump(),
-            "twap": twap_snap.model_dump() if twap_snap else None,
+            "twap": extras.get("twap"),
+            "portfolio": alloc.as_dict(),
             **extras,
         }
+
+    def evaluate_markets(
+        self,
+        markets: list[MarketRecord],
+        *,
+        latency_ms: float = 50.0,
+        p_info: float | None = None,
+        now: datetime | None = None,
+    ) -> list[dict[str, Any]]:
+        """Score the batch, allocate, then commit. One scan tick — no inter-name cooldown."""
+        now = now or datetime.now(UTC)
+        results: list[dict[str, Any] | None] = [None] * len(markets)
+        packed_idx: list[int] = []
+        packed_rows: list[dict[str, Any]] = []
+        for index, market in enumerate(markets):
+            started = monotonic_ms()
+            row = self._evaluate_market(market, latency_ms=latency_ms, p_info=p_info, now=now, dry_run=True)
+            if row.get("dry_run"):
+                packed_idx.append(index)
+                packed_rows.append(row)
+            else:
+                category = infer_category(market.tags, market.category)
+                peak = self.risk.state.peak_equity
+                drawdown = ((peak - self.risk.state.equity) / peak) if peak > 0 else 0.0
+                self.obs.after_evaluate(
+                    row,
+                    latency_ms=monotonic_ms() - started,
+                    market_id=market.market_id,
+                    category=category,
+                    session_id=self.config.trading.session_id,
+                    kill_switch=self.kills.tripped,
+                    exposure=self.risk.state.total_exposure,
+                    drawdown=drawdown,
+                )
+                results[index] = row
+
+        candidates = [row["candidate"] for row in packed_rows]
+        allocations = self.allocator.allocate(
+            candidates,
+            existing=self.exposure.snapshot(),
+            category_exposure=dict(self.risk.state.category_exposure),
+            total_exposure=self.risk.state.total_exposure,
+            concurrent_markets=set(self.risk.state.concurrent_markets),
+        )
+        for index, row, alloc in zip(packed_idx, packed_rows, allocations, strict=True):
+            started = monotonic_ms()
+            market = markets[index]
+            result = self._commit_prepared(
+                row["prepared"],
+                allocation=alloc,
+                candidate=row["candidate"],
+                enforce_cooldown=False,
+            )
+            category = infer_category(market.tags, market.category)
+            peak = self.risk.state.peak_equity
+            drawdown = ((peak - self.risk.state.equity) / peak) if peak > 0 else 0.0
+            self.obs.after_evaluate(
+                result,
+                latency_ms=monotonic_ms() - started,
+                market_id=market.market_id,
+                category=category,
+                session_id=self.config.trading.session_id,
+                kill_switch=self.kills.tripped,
+                exposure=self.risk.state.total_exposure,
+                drawdown=drawdown,
+            )
+            results[index] = result
+        return [item if item is not None else {"accepted": False, "reason": ReasonCode.NO_TRADE} for item in results]
 
     async def run_scan(
         self,
@@ -867,7 +1086,7 @@ class PaperPipeline:
             except Exception as exc:  # noqa: BLE001
                 self.obs.note_api_error("scanner", type(exc).__name__)
                 return {"ok": False, "error": type(exc).__name__, "markets": 0, "audits": []}
-        results = [self.evaluate_market(m) for m in markets]
+        results = self.evaluate_markets(markets)
         self.obs.snapshot_pipeline(self)
         return {
             "ok": True,
@@ -1190,6 +1409,37 @@ def demo_twap_market(
             "description": source,
         }
     )
+    return market
+
+
+def demo_crypto_window_market(
+    *,
+    symbol: str,
+    window: str,
+    market_id: str,
+    hot: bool = True,
+    regime: str | None = None,
+) -> MarketRecord:
+    """PAPER fixture: explicit symbol + window in text. No invented correlation."""
+    from hotflow.official import RTDS_CHAINLINK_SYMBOLS
+
+    symbol_l = symbol.lower()
+    if symbol_l not in RTDS_CHAINLINK_SYMBOLS:
+        raise ValueError(f"symbol {symbol!r} is not a documented Chainlink pair")
+    alias = symbol_l.split("/", 1)[0]
+    market = demo_market(hot=hot)
+    market.market_id = market_id
+    market.condition_id = f"0x{market_id}"
+    market.slug = market_id
+    market.token_ids = [f"{market_id}-yes"]
+    market.tags = ["crypto", alias, window]
+    market.question = f"Will {symbol_l.upper()} finish up over the next {window}?"
+    if market.book is not None:
+        market.book = market.book.model_copy(update={"token_id": f"{market_id}-yes"})
+    raw = dict(market.raw_gamma or {})
+    if regime:
+        raw["hotflow_regime"] = regime
+    market.raw_gamma = raw
     return market
 
 

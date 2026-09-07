@@ -15,11 +15,11 @@ unreachable unless every acceptance gate passes.
                     └────────────┬────────────┘
                                  │ offline only
                                  ▼
-┌──────────┐   ┌──────────┐   ┌──────────┐   ┌────────────┐   ┌────────────┐
-│ Gamma +  │──▶│ Features │──▶│ Quant    │──▶│ Risk VETO  │──▶│ Execution  │
-│ public   │   │ HMS      │   │ Fair     │   │ kill       │   │ paper /    │
-│ CLOB     │   │ Opp score│   │ value    │   │ switches   │   │ gated LIVE │
-└──────────┘   └──────────┘   └──────────┘   └────────────┘   └─────┬──────┘
+┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌────────────┐   ┌────────────┐
+│ Gamma +  │──▶│ Features │──▶│ Quant    │──▶│ Portfolio│──▶│ Risk VETO  │──▶│ Execution  │
+│ public   │   │ HMS      │   │ Fair     │   │ allocate │   │ kill       │   │ paper /    │
+│ CLOB     │   │ Opp score│   │ value    │   │ (propose)│   │ switches   │   │ gated LIVE │
+└──────────┘   └──────────┘   └──────────┘   └──────────┘   └────────────┘   └─────┬──────┘
      ▲                │              │               │               │
      │                └──────────────┴───────────────┴───────┐       │
      │                                                       ▼       ▼
@@ -61,22 +61,27 @@ evaluate hot path consumes structured `NewsImpact` features already computed.
    `NET_EXPECTED_EDGE` after **fetched** fees + spread + slippage + latency +
    adverse-selection haircut. Skip when `NET <= MIN_REQUIRED_EDGE`. News-adjusted
    `p_info` still goes through this gate.
-6. **Risk** — absolute **VETO**. Limits on order / market / category / total
+6. **Portfolio (Parte 24)** — when several names are hot in one scan, rank by
+   opportunity / risk-adjusted PnL velocity and propose TAKE / DOWNSIZE / SKIP
+   under explicit correlation groups and concentration caps. Never invents a
+   residual correlation. Does not place orders.
+7. **Risk** — absolute **VETO**. Limits on order / market / category / total
    exposure, daily/session loss, drawdown, open orders, concurrent markets,
    slippage, spread, data age, latency, cooldown. **NO TRADE is valid.** No
-   martingale; size does not increase after losses.
-7. **Kill switches** — stale WS, auth fail, position mismatch, runaway rejects,
+   martingale; size does not increase after losses. Portfolio proposals still
+   pass through this gate.
+8. **Kill switches** — stale WS, auth fail, position mismatch, runaway rejects,
    manual, data-feed dead. On trip: block new orders, cancel when safe,
    preserve logs, require explicit `reset_kill_switch()`.
-8. **Execution** — internal SM:
+9. **Execution** — internal SM:
    `CREATED → SUBMITTED → ACKNOWLEDGED → PARTIAL → FILLED`
    plus `CANCEL_*` / `REJECTED` / `EXPIRED`. Paper simulator supports partial
    fills and client-order-id idempotency. Fills come from the simulator (or
    future venue acks), **never** from a missing book level.
-9. **Storage** — SQLite now (schema ready for Postgres/Timescale). Parquet
+10. **Storage** — SQLite now (schema ready for Postgres/Timescale). Parquet
    export for features. Persist trades, orders, feature snapshots, signals,
    risk decisions.
-10. **Audit** — every opportunity, including rejects, as JSON with reason codes
+11. **Audit** — every opportunity, including rejects, as JSON with reason codes
    (`EDGE_TOO_SMALL`, `STALE_DATA`, `RISK_LIMIT`, `MARKET_NOT_HOT`,
    `UNKNOWN_RESOLUTION`, `UNKNOWN_FEES`, …).
 
@@ -105,8 +110,8 @@ when safe (`STALE_DATA` / `KILL_SWITCH_STALE_WS`).
 ## Configuration
 
 All tunables live in `configs/*.yaml` (`trading`, `scanner`, `hot_market`,
-`opportunity`, `fair_value`, `risk`, `categories`, `feeds`, `weather`,
-`sports`, `esports`, `news`, `backtest`, `ai_research`).
+`opportunity`, `fair_value`, `risk`, `portfolio`, `categories`, `feeds`,
+`weather`, `sports`, `esports`, `news`, `backtest`, `ai_research`).
 No scattered magic numbers in strategy code.
 
 Also: resolution parser (unknown rules ⇒ DO_NOT_TRADE), basic filter,

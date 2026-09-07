@@ -20,6 +20,24 @@ drawdown exceeded, manual halt.
 On trip: block new orders → cancel when safe → keep logs → require explicit
 `KillSwitchBoard.reset(acknowledge=...)`.
 
+## Portfolio vs risk (Parte 24)
+
+The portfolio layer may skip or downsize (`CORRELATED_EXPOSURE`,
+`PORTFOLIO_CONCENTRATION`, `PORTFOLIO_DOWNSIZED`) using explicit correlation
+groups plus the same hard caps:
+
+- `max_concurrent_markets` (open-position / concurrent-market cap)
+- `max_category_exposure`
+- `max_total_exposure`
+- `max_correlated_exposure` (backstop on the summed correlated bucket)
+- `max_order_notional`
+
+Those proposals do **not** override VETO. After allocation, `RiskEngine.decide`
+still runs. A score of 100 still cannot force a blocked order.
+
+Correlation is rule-based only (same underlying, same category+window, tag
+overlap, YAML groups). No estimated residual. See `docs/strategy.md`.
+
 ## Capital order (Parte 54)
 
 1. Survive  
