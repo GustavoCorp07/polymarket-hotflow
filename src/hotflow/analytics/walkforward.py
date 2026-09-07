@@ -153,6 +153,26 @@ def build_walk_forward(
             "Not a LIVE promotion and not purged CV."
         ),
     }
+    from hotflow.analytics.mixed_review import build_mixed_detected_review, is_mixed_soak
+
+    if is_mixed_soak(report):
+        mixed = build_mixed_detected_review(report)
+        payload["mixed_soak"] = True
+        payload["analysis_unit"] = mixed["analysis_unit"]
+        payload["detected_regime_split"] = mixed["detected_regime_split"]
+        payload["allocator_outcomes"] = mixed["allocator_outcomes"]
+        payload["close_pnl_by_detected_label"] = mixed["close_pnl_by_detected_label"]
+        payload["decay_by_detected_label"] = mixed["decay_by_detected_label"]
+        payload["synthetic_regime_split"] = payload["regime_split"]
+        payload["regime_split"] = mixed["detected_regime_split"]
+        payload["n_proposals"] = mixed["n_proposals"]
+        if not folds:
+            payload["fold_note"] = (
+                f"n_closes={len(extract.trades)} < train_size+test_size "
+                f"({train_size}+{test_size}); folds not invented. "
+                "Pass smaller --train-size/--test-size only for a caveated descriptive split."
+            )
+        payload["note"] = mixed["note"] + " " + payload["note"]
     if blocked:
         payload["refused"] = True
         payload["reason"] = blocked.get("reason")
@@ -176,5 +196,16 @@ def format_walk_forward(report: dict[str, Any]) -> str:
             f"expectancy={hold.get('expectancy')} caveat={sample.get('caveat')}"
         )
     regime = report.get("regime_split") or {}
-    lines.append(f"  regime={regime.get('status')}")
+    lines.append(f"  regime={regime.get('status')} origin={regime.get('origin') or 'closes'}")
+    if report.get("mixed_soak"):
+        lines.append(f"  n_proposals={report.get('n_proposals')} unit=detected_proposals")
+        if report.get("fold_note"):
+            lines.append(f"  fold_note={report.get('fold_note')}")
+        for name, bucket in (regime.get("regimes") or {}).items():
+            sample = bucket.get("sample") or {}
+            lines.append(
+                f"  detected {name} n={bucket.get('n_proposals')} "
+                f"accepted={bucket.get('accepted')} skipped={bucket.get('skipped')} "
+                f"caveat={sample.get('caveat')}"
+            )
     return "\n".join(lines)

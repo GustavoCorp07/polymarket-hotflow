@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PAPER walk-forward on existing closes. No LIVE, no invented trades."""
+"""PAPER walk-forward on existing closes or mixed-soak detected labels. No LIVE."""
 
 from __future__ import annotations
 

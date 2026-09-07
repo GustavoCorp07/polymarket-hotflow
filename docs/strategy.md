@@ -102,8 +102,11 @@ features — candle-only fixtures are refused. Fill simulation applies documente
 paper latency, queue penalty, maker fill probability, and taker delay. Fees
 come from the dated fixture schedule via the official taker formula.
 Train / validation / OOS splits plus `hotflow walk-forward` on existing
-closed trades (expanding or rolling; fold-size caveats). Do not pick a
-strategy by max absolute walk-forward PnL.
+closed trades (expanding or rolling; fold-size caveats). Mixed soak JSON
+(`paper-soak --mixed`) splits by **detected** detector labels on proposals,
+not the `--long` synthetic `regime=` notes. A 5-cycle fixture is too small
+for strong folds; the report says so instead of inventing significance.
+Do not pick a strategy by max absolute walk-forward PnL.
 Do not pick a strategy by max absolute backtest PnL.
 
 `hotflow tune` may suggest bounded threshold/weight changes from expectancy,

@@ -794,7 +794,7 @@ def walk_forward_cmd(
     rank_by: str | None = typer.Option(None, "--rank-by", help="Refuses abs_pnl / pnl"),
     out: Path | None = typer.Option(None, "--out"),
 ) -> None:
-    """Walk-forward + optional regime split on existing closes. Suggestion-only."""
+    """Walk-forward + regime split on existing reports. Mixed soak uses detected labels."""
     from hotflow.analytics.review import load_review_source
     from hotflow.analytics.walkforward import build_walk_forward, format_walk_forward
 

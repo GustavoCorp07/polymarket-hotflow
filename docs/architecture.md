@@ -120,6 +120,8 @@ microstructure (mid/microprice/imbalance), capped Kelly sizing, maker/taker EV,
 PnL velocity, first-class regime detectors (Parte 25; N/A if features missing),
 Parte 46 signal-quality JSON, Parte 52–53
 performance/decay reviews from existing ledger/backtest JSON (suggestion-only).
+Mixed soak JSON adds a detected-label split (proposals first; joined close PnL
+second). `--long` remains the ≥50-close synthetic-label path.
 
 ## Weather / sports paper adapters
 

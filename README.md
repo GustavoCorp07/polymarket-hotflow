@@ -64,6 +64,8 @@ hotflow paper-run --mock --cycles 3 --flatten
 hotflow paper-soak --cycles 5
 hotflow paper-soak --long --target-closes 50
 hotflow paper-soak --mixed --cycles 5
+hotflow walk-forward --report reports/paper-soak-mixed-*.json
+hotflow decay --report reports/paper-soak-mixed-*.json
 
 # Optional localhost observability (PAPER only; off by default)
 hotflow serve-metrics

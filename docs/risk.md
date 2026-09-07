@@ -40,7 +40,9 @@ overlap, YAML groups). No estimated residual. See `docs/strategy.md`.
 
 `hotflow paper-soak --mixed` audits those skips/downsizes and group-scoped
 regime scales on a deterministic 5m/15m + news book. It does not open LIVE
-gates and cannot bypass VETO.
+gates and cannot bypass VETO. `hotflow walk-forward` / `decay` on that JSON
+group by **detected** labels; a 5-cycle fixture is flagged `too_small` /
+`insufficient_sample`, not promoted as edge.
 
 ## Capital order (Parte 54)
 
