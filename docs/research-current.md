@@ -57,7 +57,7 @@ server-side — omit them.
 | --- | --- | --- |
 | Gamma REST | `https://gamma-api.polymarket.com` | Events, markets, tags, resolution + fee metadata |
 | CLOB REST | `https://clob.polymarket.com` | Books, tick/min size, fee-rate, orders (auth for private) |
-| Data API | `https://data-api.polymarket.com` | Positions, activity (not used on paper hot path) |
+| Data API | `https://data-api.polymarket.com` | Positions, activity, public analytics (cold-path / future P&L) |
 | Market WS | `wss://ws-subscriptions-clob.polymarket.com/ws/market` | Public book / price / lifecycle |
 | User WS | `wss://ws-subscriptions-clob.polymarket.com/ws/user` | Authenticated order/trade updates |
 | RTDS | `wss://ws-live-data.polymarket.com` | Public reference prices, comments, trades, Chainlink TWAP relay |

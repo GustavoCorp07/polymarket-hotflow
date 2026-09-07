@@ -12,8 +12,15 @@ from pydantic import BaseModel, Field
 
 
 class TradingMode(StrEnum):
+    BACKTEST = "backtest"
     PAPER = "paper"
+    SHADOW = "shadow"
     LIVE = "live"
+
+
+class LiquidityStyle(StrEnum):
+    MAKER = "MAKER"
+    TAKER = "TAKER"
 
 
 class ResourceTier(StrEnum):
@@ -48,6 +55,11 @@ class KillSwitchReason(StrEnum):
     MANUAL = "MANUAL"
     DATA_FEED_DEAD = "DATA_FEED_DEAD"
     STALE_CRITICAL_DATA = "STALE_CRITICAL_DATA"
+    IMPOSSIBLE_PNL = "IMPOSSIBLE_PNL"
+    EXCESSIVE_LATENCY = "EXCESSIVE_LATENCY"
+    ABNORMAL_SLIPPAGE = "ABNORMAL_SLIPPAGE"
+    DUPLICATED_ORDERS = "DUPLICATED_ORDERS"
+    DRAWDOWN_EXCEEDED = "DRAWDOWN_EXCEEDED"
 
 
 class BookLevel(BaseModel):
@@ -112,6 +124,14 @@ class ResolutionMeta(BaseModel):
     end_date: str | None = None
     resolved_by: str | None = None
     automatically_resolved: bool | None = None
+    metric: str | None = None
+    threshold: str | None = None
+    time_window: str | None = None
+    timezone: str | None = None
+    rounding_rule: str | None = None
+    special_conditions: list[str] = Field(default_factory=list)
+    parse_confidence: float = 0.0
+    tradeable: bool = False
 
 
 class MarketRecord(BaseModel):
@@ -161,6 +181,7 @@ class EdgeBreakdown(BaseModel):
     slippage: float
     latency_haircut: float
     adverse_selection: float
+    fill_penalty: float = 0.0
     net_expected_edge: float
     confidence: float
     fee_rate_used: float | None = None
@@ -180,6 +201,11 @@ class Opportunity(BaseModel):
     execution_probability: float
     intended_shares: float
     intended_notional: float
+    style: LiquidityStyle = LiquidityStyle.TAKER
+    ev_maker: float = 0.0
+    ev_taker: float = 0.0
+    pnl_velocity: float = 0.0
+    signal_half_life_ms: float = 0.0
 
 
 class SignalAudit(BaseModel):

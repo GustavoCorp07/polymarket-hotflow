@@ -1,7 +1,11 @@
 # HOTFLOW architecture
 
+Source of truth: [`MISSION-FULL.md`](MISSION-FULL.md). Alignment map:
+[`MISSION-ALIGNMENT.md`](MISSION-ALIGNMENT.md).
+
 Paper-first autonomous multi-market system for Polymarket. Default mode is
-**PAPER**. LIVE transmit is unreachable unless every acceptance gate passes.
+**PAPER**. Modes: `backtest` / `paper` / `shadow` / `live`. LIVE transmit is
+unreachable unless every acceptance gate passes.
 
 ```
                     ┌─────────────────────────┐
@@ -40,8 +44,9 @@ Paper-first autonomous multi-market system for Polymarket. Default mode is
    `enableOrderBook`, liquidity, volume, bid/ask/spread, fee flags, resolution
    metadata. Not a category whitelist.
 2. **Hot Market Score (HMS)** — 0–100 from liquidity, volume, spread, book
-   openness, competitive, persistence. Tiers: COLD / WARM / HOT / ULTRA-HOT
-   (thresholds in `configs/default.yaml`).
+   openness, competitive, persistence, urgency (time-to-resolution). Tiers
+   (Parte 9): COLD 0–30, WARM 30–55, HOT 55–75, ULTRA-HOT 75–100. Resource plan:
+   metadata / low-frequency / full book / highest frequency.
 3. **Opportunity** — only if HMS ≥ configured threshold:
    `expected_net_edge × confidence × liquidity × persistence × execution_probability`
    with YAML weights.
@@ -92,6 +97,10 @@ when safe (`STALE_DATA` / `KILL_SWITCH_STALE_WS`).
 All tunables live in `configs/*.yaml` (`trading`, `scanner`, `hot_market`,
 `opportunity`, `fair_value`, `risk`, `categories`, `feeds`, `ai_research`).
 No scattered magic numbers in strategy code.
+
+Also: resolution parser (unknown rules ⇒ DO_NOT_TRADE), basic filter,
+microstructure (mid/microprice/imbalance), capped Kelly sizing, maker/taker EV,
+PnL velocity, regime labels, Parte 46 signal-quality JSON.
 
 ## Scaffolded (interfaces tested; adapters incomplete)
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 
 from hotflow.config import HotMarketConfig
+from hotflow.features.time_features import time_to_resolution_seconds, urgency_score
 from hotflow.types import HotMarketResult, MarketRecord, ResourceTier
 
 
@@ -65,6 +66,7 @@ def score_hot_market(market: MarketRecord, cfg: HotMarketConfig) -> HotMarketRes
         "book_open": _book_open(market),
         "competitive": _competitive(market),
         "persistence": _persistence(market),
+        "urgency": urgency_score(time_to_resolution_seconds(market)),
     }
     weights = cfg.weights.model_dump()
     total_w = sum(weights.values()) or 1.0

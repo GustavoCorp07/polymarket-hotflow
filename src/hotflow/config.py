@@ -25,12 +25,14 @@ class CategoryToggles(BaseModel):
 
 
 class TradingConfig(BaseModel):
-    mode: str = "paper"
+    mode: str = "paper"  # backtest | paper | shadow | live
     shadow: bool = False
     session_id: str = "local-paper"
     paper_starting_cash: float = 10_000.0
     paper_fill_ratio: float = 0.55
     min_required_edge: float = 0.012
+    min_confidence: float = 0.35
+    signal_half_life_ms: float = 2_000.0
     categories: CategoryToggles = Field(default_factory=CategoryToggles)
 
 
@@ -51,23 +53,25 @@ class ScannerConfig(BaseModel):
 
 
 class HotMarketWeights(BaseModel):
-    liquidity: float = 0.28
-    volume: float = 0.22
-    spread: float = 0.20
+    liquidity: float = 0.26
+    volume: float = 0.20
+    spread: float = 0.18
     book_open: float = 0.12
     competitive: float = 0.08
     persistence: float = 0.10
+    urgency: float = 0.06
 
 
 class HotMarketTiers(BaseModel):
+    # Mission example (Parte 9): 0–30 COLD, 30–55 WARM, 55–75 HOT, 75–100 ULTRA-HOT
     cold: float = 0.0
-    warm: float = 25.0
-    hot: float = 50.0
+    warm: float = 30.0
+    hot: float = 55.0
     ultra_hot: float = 75.0
 
 
 class HotMarketConfig(BaseModel):
-    min_score_to_trade: float = 50.0
+    min_score_to_trade: float = 55.0
     weights: HotMarketWeights = Field(default_factory=HotMarketWeights)
     liquidity_ref: float = 10_000.0
     volume_ref: float = 5_000.0
@@ -97,8 +101,27 @@ class CryptoFairValueConfig(BaseModel):
 class FairValueConfig(BaseModel):
     latency_haircut: float = 0.0015
     adverse_selection_haircut: float = 0.0020
+    fill_penalty: float = 0.0010
     default_confidence: float = 0.55
     crypto: CryptoFairValueConfig = Field(default_factory=CryptoFairValueConfig)
+
+
+class SizingConfig(BaseModel):
+    kelly_fraction: float = 0.10
+    max_kelly: float = 0.05
+    variance_floor: float = 0.04
+    book_frac: float = 0.15
+
+
+class MakerTakerConfig(BaseModel):
+    maker_fill_probability: float = 0.35
+    maker_adverse_mult: float = 1.30
+
+
+class ExperimentConfig(BaseModel):
+    strategy_id: str = "crypto_updown"
+    version: str = "0.1.0"
+    feature_set_version: str = "v1"
 
 
 class RiskConfig(BaseModel):
@@ -116,8 +139,12 @@ class RiskConfig(BaseModel):
     max_data_age_ms: int = 30_000
     max_latency_ms: int = 1_500
     cooldown_ms: int = 1_500
+    cooldown_after_losses_ms: int = 5_000
     runaway_reject_count: int = 5
     no_martingale: bool = True
+    max_correlated_exposure: float = 1_500.0
+    min_liquidity: float = 200.0
+    min_confidence: float = 0.35
 
 
 class FeedConfig(BaseModel):
@@ -175,12 +202,23 @@ class HotflowConfig(BaseModel):
     risk: RiskConfig = Field(default_factory=RiskConfig)
     feeds: FeedsConfig = Field(default_factory=FeedsConfig)
     ai_research: AIResearchConfig = Field(default_factory=AIResearchConfig)
+    sizing: SizingConfig = Field(default_factory=SizingConfig)
+    maker_taker: MakerTakerConfig = Field(default_factory=MakerTakerConfig)
+    experiment: ExperimentConfig = Field(default_factory=ExperimentConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
     monitoring: MonitoringConfig = Field(default_factory=MonitoringConfig)
 
     @property
     def is_paper(self) -> bool:
-        return self.trading.mode.lower() != "live"
+        return self.trading.mode.lower() not in {"live"}
+
+    @property
+    def is_shadow(self) -> bool:
+        return self.trading.shadow or self.trading.mode.lower() == "shadow"
+
+    @property
+    def is_backtest(self) -> bool:
+        return self.trading.mode.lower() == "backtest"
 
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:

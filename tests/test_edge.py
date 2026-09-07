@@ -49,6 +49,7 @@ def test_net_edge_accounts_for_costs() -> None:
         - edge.slippage
         - edge.latency_haircut
         - edge.adverse_selection
+        - edge.fill_penalty
     )
     assert abs(edge.net_expected_edge - expected) < 1e-9
     assert edge.raw_edge > edge.net_expected_edge

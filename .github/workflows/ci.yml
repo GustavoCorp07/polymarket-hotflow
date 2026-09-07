@@ -22,3 +22,9 @@ jobs:
         run: pytest -q
       - name: Paper mock smoke
         run: hotflow paper-run --mock --out reports/ci-paper.json
+      - name: Backtest interface smoke
+        run: python -c "from hotflow.backtest import NullBacktester; print(NullBacktester)"
+      - name: Secret hygiene
+        run: |
+          test ! -f .env
+          ! git grep -n "BEGIN .*PRIVATE KEY" -- ':!docs' ':!tests/test_kimi.py' ':!src/hotflow/ai_research/kimi_client.py'

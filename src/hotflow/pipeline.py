@@ -7,15 +7,22 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from hotflow.analytics.experiments import git_commit
+from hotflow.analytics.pnl_velocity import pnl_velocity
+from hotflow.analytics.signal_quality import signal_quality
 from hotflow.config import HotflowConfig
+from hotflow.discovery.resolution import parse_resolution
 from hotflow.discovery.scanner import UniverseScanner, infer_category
 from hotflow.execution.live_gate import live_gates_open
 from hotflow.execution.paper import PaperBroker
 from hotflow.fairvalue.crypto import CryptoFairValue
+from hotflow.fairvalue.maker_taker import choose_style
 from hotflow.features.snapshot import build_feature_snapshot
 from hotflow.hotmarket.opportunity import score_opportunity
 from hotflow.hotmarket.score import score_hot_market
+from hotflow.hotmarket.watchlist import resource_plan
 from hotflow.marketdata.freshness import FeedClock
+from hotflow.portfolio.sizing import size_notional
 from hotflow.reason_codes import ReasonCode
 from hotflow.risk.engine import RiskEngine
 from hotflow.risk.kill_switch import KillSwitchBoard
@@ -36,14 +43,12 @@ def _category_enabled(config: HotflowConfig, category: str) -> bool:
     return bool(toggles.get(key, toggles.get("other", True)))
 
 
-def _resolution_unknown(market: MarketRecord) -> bool:
-    meta = market.resolution
-    return not (meta.source or meta.uma_status or meta.end_date or meta.resolved_by)
-
-
-def _intended_shares(market: MarketRecord, config: HotflowConfig) -> float:
+def _intended_shares(market: MarketRecord, config: HotflowConfig, notional: float, price: float) -> float:
     min_size = market.order_min_size or (market.book.min_order_size if market.book else None) or 5.0
-    return float(min_size)
+    if price <= 0:
+        return float(min_size)
+    sized = notional / price
+    return max(float(min_size), sized)
 
 
 class PaperPipeline:
@@ -102,12 +107,13 @@ class PaperPipeline:
             self._audit(market_id=market.market_id, accepted=False, reason=ReasonCode.NOT_ACCEPTING_ORDERS)
             return {"accepted": False, "reason": ReasonCode.NOT_ACCEPTING_ORDERS}
 
-        if _resolution_unknown(market):
+        if not market.resolution.tradeable:
             self._audit(market_id=market.market_id, accepted=False, reason=ReasonCode.UNKNOWN_RESOLUTION)
             return {"accepted": False, "reason": ReasonCode.UNKNOWN_RESOLUTION}
 
         hms = score_hot_market(market, self.config.hot_market)
         snap = build_feature_snapshot(market, hms)
+        snap.extras["resource_plan"] = resource_plan(hms.tier)
         if self.store:
             self.store.save_feature(market.market_id, snap.model_dump(mode="json"))
 
@@ -122,11 +128,11 @@ class PaperPipeline:
             return {"accepted": False, "reason": ReasonCode.MARKET_NOT_HOT, "hms": hms.score}
 
         token_id = market.token_ids[0] if market.token_ids else "unknown"
-        shares = _intended_shares(market, self.config)
+        probe_shares = market.order_min_size or 5.0
         edge = self.fair.evaluate(
             market,
             side=Side.BUY,
-            shares=shares,
+            shares=probe_shares,
             min_required_edge=self.config.trading.min_required_edge,
             config=self.config.fair_value,
             p_info=p_info,
@@ -142,6 +148,20 @@ class PaperPipeline:
             )
             return {"accepted": False, "reason": edge.reason, "edge": edge.model_dump()}
 
+        notional = size_notional(
+            edge,
+            bankroll=self.config.trading.paper_starting_cash,
+            liquidity=market.liquidity,
+            sizing=self.config.sizing,
+            risk=self.config.risk,
+        )
+        shares = _intended_shares(market, self.config, notional, edge.market_price)
+        if edge.market_price > 0:
+            max_shares = self.config.risk.max_order_notional / edge.market_price
+            shares = min(shares, max_shares)
+        style, ev_maker, ev_taker = choose_style(edge, self.config.maker_taker)
+        half_life = self.config.trading.signal_half_life_ms
+        velocity = pnl_velocity(edge.net_expected_edge * shares, half_life, edge.p_fair * (1 - edge.p_fair))
         opp = score_opportunity(
             market=market,
             hms=hms,
@@ -150,6 +170,11 @@ class PaperPipeline:
             token_id=token_id,
             shares=shares,
             cfg=self.config.opportunity,
+            style=style,
+            ev_maker=ev_maker,
+            ev_taker=ev_taker,
+            pnl_velocity=velocity,
+            signal_half_life_ms=half_life,
         )
         age = self.clock.age_ms("clob_book") if market.book else self.clock.age_ms("gamma")
         decision = self.risk.decide(
@@ -159,6 +184,7 @@ class PaperPipeline:
             data_age_ms=age,
             latency_ms=latency_ms,
             now=now,
+            requested_notional=min(opp.intended_notional, self.config.risk.max_order_notional),
         )
         if self.store:
             self.store.save_risk(market.market_id, decision)
@@ -175,7 +201,13 @@ class PaperPipeline:
             )
             return {"accepted": False, "reason": decision.reason, "detail": decision.detail}
 
-        if self.config.trading.shadow:
+        quality = signal_quality(
+            opp,
+            decision="TRADE" if decision.allowed else "SKIP",
+            reason_codes=[decision.reason],
+            strategy=self.config.experiment.strategy_id,
+        )
+        if self.config.is_shadow or self.config.is_backtest:
             self._audit(
                 market_id=market.market_id,
                 accepted=False,
@@ -183,6 +215,7 @@ class PaperPipeline:
                 hms=hms.score,
                 net_edge=edge.net_expected_edge,
                 opportunity_score=opp.score,
+                extra={"would_buy": True, "signal": quality},
             )
             return {"accepted": False, "reason": ReasonCode.SHADOW_MODE, "opportunity": opp.model_dump()}
 
@@ -218,7 +251,13 @@ class PaperPipeline:
             tier=hms.tier.value,
             net_edge=edge.net_expected_edge,
             opportunity_score=opp.score,
-            extra={"client_order_id": order.client_order_id, "status": order.status.value},
+            extra={
+                "client_order_id": order.client_order_id,
+                "status": order.status.value,
+                "signal": quality,
+                "git_commit": git_commit(),
+                "strategy_version": self.config.experiment.version,
+            },
         )
         return {"accepted": True, "reason": ReasonCode.OK, "order": order.model_dump(mode="json")}
 
@@ -254,7 +293,7 @@ def write_report(path: Path, payload: dict[str, Any]) -> Path:
 
 def demo_market(*, hot: bool = True, fees_enabled: bool = True, rate: float = 0.04) -> MarketRecord:
     """Deterministic market for offline paper-run / tests (not live prices)."""
-    from hotflow.types import FeeSchedule, ResolutionMeta
+    from hotflow.types import FeeSchedule
 
     if hot:
         asks = [BookLevel(price=0.42, size=80.0), BookLevel(price=0.44, size=120.0)]
@@ -287,7 +326,9 @@ def demo_market(*, hot: bool = True, fees_enabled: bool = True, rate: float = 0.
         order_min_size=5.0,
         tick_size=0.01,
         fees=FeeSchedule(enabled=fees_enabled, rate=rate, exponent=1.0, taker_only=True, source="fixture"),
-        resolution=ResolutionMeta(source="demo-fixture", end_date="2099-01-01T00:00:00Z"),
+        resolution=parse_resolution(
+            {"resolutionSource": "demo-fixture", "endDate": "2099-01-01T00:00:00Z"}
+        ),
         book=OrderBook(
             token_id="demo-yes",
             condition_id="0xdemo",

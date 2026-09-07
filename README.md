@@ -6,7 +6,14 @@ Paper-first autonomous multi-market quantitative system for [Polymarket](https:/
 
 Kimi K3 is **cold-path research only**. The decide/transmit path is deterministic Python.
 
-Official endpoints and fee/tick/min-size fields are documented in [`docs/research-current.md`](docs/research-current.md). Architecture: [`docs/architecture.md`](docs/architecture.md).
+**Source of truth:** [`docs/MISSION-FULL.md`](docs/MISSION-FULL.md) (64-part mission).
+Alignment map: [`docs/MISSION-ALIGNMENT.md`](docs/MISSION-ALIGNMENT.md).
+
+Official endpoints and fee/tick/min-size fields: [`docs/research-current.md`](docs/research-current.md).
+Architecture: [`docs/architecture.md`](docs/architecture.md). Also
+[`docs/strategy.md`](docs/strategy.md), [`docs/risk.md`](docs/risk.md),
+[`docs/security.md`](docs/security.md), [`docs/runbook.md`](docs/runbook.md),
+[`docs/deployment.md`](docs/deployment.md).
 
 ## Safety rules
 

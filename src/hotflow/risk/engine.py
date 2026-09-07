@@ -77,7 +77,7 @@ class RiskEngine:
                 detail="no auto risk-up after losses",
             )
 
-        if notional > cfg.max_order_notional:
+        if notional > cfg.max_order_notional + 1e-9:
             return RiskDecision(allowed=False, veto=True, reason=ReasonCode.RISK_LIMIT, detail="max_order_notional")
 
         market_exp = self.state.market_exposure.get(opp.market_id, 0.0) + notional
@@ -100,6 +100,7 @@ class RiskEngine:
         if self.state.peak_equity > 0:
             dd = (self.state.peak_equity - self.state.equity) / self.state.peak_equity
             if dd >= cfg.max_drawdown:
+                self.kills.trip(KillSwitchReason.DRAWDOWN_EXCEEDED, "max_drawdown")
                 return RiskDecision(allowed=False, veto=True, reason=ReasonCode.RISK_LIMIT, detail="max_drawdown")
 
         if self.state.open_orders >= cfg.max_open_orders:
@@ -109,8 +110,19 @@ class RiskEngine:
         if extra_market and len(self.state.concurrent_markets) >= cfg.max_concurrent_markets:
             return RiskDecision(allowed=False, veto=True, reason=ReasonCode.RISK_LIMIT, detail="max_concurrent_markets")
 
+        if opp.edge.confidence < cfg.min_confidence:
+            return RiskDecision(allowed=False, veto=True, reason=ReasonCode.LOW_CONFIDENCE, detail="min_confidence")
+
         if spread is not None and spread > cfg.max_spread:
-            return RiskDecision(allowed=False, veto=True, reason=ReasonCode.SPREAD_TOO_WIDE, detail="max_spread")
+            return RiskDecision(
+                allowed=False, veto=True, reason=ReasonCode.SPREAD_TOO_LARGE, detail="max_spread"
+            )
+
+        other_cat = self.state.category_exposure.get(category, 0.0)
+        if other_cat + notional > cfg.max_correlated_exposure and extra_market:
+            return RiskDecision(
+                allowed=False, veto=True, reason=ReasonCode.CORRELATED_EXPOSURE, detail="max_correlated_exposure"
+            )
 
         if opp.edge.slippage > cfg.max_slippage:
             return RiskDecision(allowed=False, veto=True, reason=ReasonCode.SLIPPAGE_TOO_HIGH, detail="max_slippage")
@@ -124,7 +136,8 @@ class RiskEngine:
         current = now or datetime.now(UTC)
         if self.state.last_order_at is not None:
             elapsed_ms = (current - self.state.last_order_at).total_seconds() * 1000.0
-            if elapsed_ms < cfg.cooldown_ms:
+            needed = cfg.cooldown_after_losses_ms if self.state.last_was_loss else cfg.cooldown_ms
+            if elapsed_ms < needed:
                 return RiskDecision(allowed=False, veto=True, reason=ReasonCode.COOLDOWN, detail="cooldown")
 
         return RiskDecision(allowed=True, veto=False, reason=ReasonCode.OK)

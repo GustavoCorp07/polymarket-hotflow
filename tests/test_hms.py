@@ -20,6 +20,7 @@ def test_tiers_thresholds() -> None:
     assert tier_for(30, cfg) is ResourceTier.WARM
     assert tier_for(55, cfg) is ResourceTier.HOT
     assert tier_for(80, cfg) is ResourceTier.ULTRA_HOT
+    assert "urgency" in score_hot_market(demo_market(hot=True), cfg).components
 
 
 def test_closed_book_penalizes_score() -> None:

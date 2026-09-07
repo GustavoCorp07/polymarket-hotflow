@@ -62,6 +62,7 @@ class CryptoFairValue:
                 slippage=0.0,
                 latency_haircut=config.latency_haircut,
                 adverse_selection=config.adverse_selection_haircut,
+                fill_penalty=config.fill_penalty,
                 net_expected_edge=0.0,
                 confidence=0.0,
                 skip=True,
@@ -78,6 +79,7 @@ class CryptoFairValue:
                 slippage=0.0,
                 latency_haircut=config.latency_haircut,
                 adverse_selection=config.adverse_selection_haircut,
+                fill_penalty=config.fill_penalty,
                 net_expected_edge=0.0,
                 confidence=0.0,
                 skip=True,
@@ -97,6 +99,7 @@ class CryptoFairValue:
                 slippage=0.0,
                 latency_haircut=config.latency_haircut,
                 adverse_selection=config.adverse_selection_haircut,
+                fill_penalty=config.fill_penalty,
                 net_expected_edge=0.0,
                 confidence=config.default_confidence,
                 skip=True,
@@ -108,7 +111,16 @@ class CryptoFairValue:
             levels = [(market_price, shares)]
         slippage = walk_slippage(levels, shares, is_buy=(side == Side.BUY))
         spread_cost = max(0.0, (ask - bid) / 2.0)
-        net = raw_edge - fee - spread_cost - slippage - config.latency_haircut - config.adverse_selection_haircut
+        fill_penalty = config.fill_penalty
+        net = (
+            raw_edge
+            - fee
+            - spread_cost
+            - slippage
+            - config.latency_haircut
+            - config.adverse_selection_haircut
+            - fill_penalty
+        )
         skip = net <= min_required_edge
         return EdgeBreakdown(
             p_fair=p_fair,
@@ -119,6 +131,7 @@ class CryptoFairValue:
             slippage=slippage,
             latency_haircut=config.latency_haircut,
             adverse_selection=config.adverse_selection_haircut,
+            fill_penalty=fill_penalty,
             net_expected_edge=net,
             confidence=config.default_confidence if p_info is None else min(0.85, config.default_confidence + 0.2),
             fee_rate_used=market.fees.rate,

@@ -7,8 +7,10 @@ from typing import Any
 
 from hotflow.config import HotflowConfig, ScannerConfig
 from hotflow.discovery.clob import ClobPublicClient
+from hotflow.discovery.filters import basic_filter_reason
 from hotflow.discovery.gamma import GammaClient, as_bool, as_float, parse_json_list, tag_labels
-from hotflow.types import FeeSchedule, MarketRecord, ResolutionMeta
+from hotflow.discovery.resolution import parse_resolution
+from hotflow.types import FeeSchedule, MarketRecord
 
 log = logging.getLogger("hotflow.discovery")
 
@@ -75,13 +77,7 @@ def market_from_gamma(raw: dict[str, Any]) -> MarketRecord:
         order_min_size=as_float(raw.get("orderMinSize")),
         tick_size=as_float(raw.get("orderPriceMinTickSize")),
         fees=fees,
-        resolution=ResolutionMeta(
-            source=raw.get("resolutionSource"),
-            uma_status=raw.get("umaResolutionStatus"),
-            end_date=raw.get("endDate") or raw.get("endDateIso"),
-            resolved_by=raw.get("resolvedBy"),
-            automatically_resolved=as_bool(raw.get("automaticallyResolved")),
-        ),
+        resolution=parse_resolution(raw),
         raw_gamma={
             k: raw[k]
             for k in (
@@ -99,21 +95,7 @@ def market_from_gamma(raw: dict[str, Any]) -> MarketRecord:
 
 
 def is_eligible(market: MarketRecord, cfg: ScannerConfig) -> bool:
-    if not market.market_id:
-        return False
-    if cfg.exclude_closed and market.closed:
-        return False
-    if market.archived:
-        return False
-    if cfg.require_accepting_orders and market.accepting_orders is False:
-        return False
-    if cfg.require_enable_order_book and market.enable_order_book is False:
-        return False
-    if market.liquidity is not None and market.liquidity < cfg.min_liquidity:
-        return False
-    if market.volume_24hr is not None and market.volume_24hr < cfg.min_volume_24h:
-        return False
-    if market.spread is not None and market.spread > cfg.max_spread:
+    if basic_filter_reason(market, cfg) is not None:
         return False
     if cfg.include_tags:
         wanted = {tag.lower() for tag in cfg.include_tags}

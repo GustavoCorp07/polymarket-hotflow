@@ -3,7 +3,14 @@
 from __future__ import annotations
 
 from hotflow.config import OpportunityConfig
-from hotflow.types import EdgeBreakdown, HotMarketResult, MarketRecord, Opportunity, Side
+from hotflow.types import (
+    EdgeBreakdown,
+    HotMarketResult,
+    LiquidityStyle,
+    MarketRecord,
+    Opportunity,
+    Side,
+)
 
 
 def _clip01(value: float) -> float:
@@ -19,6 +26,11 @@ def score_opportunity(
     token_id: str,
     shares: float,
     cfg: OpportunityConfig,
+    style: LiquidityStyle = LiquidityStyle.TAKER,
+    ev_maker: float = 0.0,
+    ev_taker: float = 0.0,
+    pnl_velocity: float = 0.0,
+    signal_half_life_ms: float = 0.0,
 ) -> Opportunity:
     liquidity_factor = _clip01((market.liquidity or 0.0) / 10_000.0)
     persistence = hms.components.get("persistence", 0.0)
@@ -47,4 +59,9 @@ def score_opportunity(
         execution_probability=execution_probability,
         intended_shares=shares,
         intended_notional=notional,
+        style=style,
+        ev_maker=ev_maker,
+        ev_taker=ev_taker,
+        pnl_velocity=pnl_velocity,
+        signal_half_life_ms=signal_half_life_ms,
     )
