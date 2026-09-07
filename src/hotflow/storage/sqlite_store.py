@@ -9,6 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from hotflow.portfolio.ledger import LedgerEvent, LedgerSnapshot
 from hotflow.types import OrderRecord, RiskDecision, SignalAudit
 
 SCHEMA = """
@@ -65,6 +66,43 @@ CREATE TABLE IF NOT EXISTS features (
     ts TEXT NOT NULL,
     market_id TEXT NOT NULL,
     payload TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS ledger_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    market_id TEXT,
+    token_id TEXT,
+    side TEXT,
+    size REAL,
+    price REAL,
+    fee REAL,
+    cash_delta REAL,
+    realized_delta REAL,
+    closed INTEGER NOT NULL,
+    client_order_id TEXT,
+    note TEXT,
+    cash_after REAL,
+    equity_after REAL
+);
+CREATE TABLE IF NOT EXISTS ledger_snapshots (
+    session_id TEXT PRIMARY KEY,
+    starting_cash REAL NOT NULL,
+    cash REAL NOT NULL,
+    realized_pnl REAL NOT NULL,
+    unrealized_pnl REAL NOT NULL,
+    fees REAL NOT NULL,
+    equity REAL NOT NULL,
+    peak_equity REAL NOT NULL,
+    drawdown REAL NOT NULL,
+    session_pnl REAL NOT NULL,
+    win_rate REAL NOT NULL,
+    expectancy REAL NOT NULL,
+    closed_count INTEGER NOT NULL,
+    positions TEXT NOT NULL,
+    event_count INTEGER NOT NULL,
+    updated_at TEXT NOT NULL
 );
 """
 
@@ -151,6 +189,71 @@ class SqliteStore:
             (market_id, json.dumps(payload)),
         )
         self._conn.commit()
+
+    def save_ledger_event(self, event: LedgerEvent) -> None:
+        row = event.as_dict()
+        self._conn.execute(
+            """INSERT INTO ledger_events
+            (ts, session_id, kind, market_id, token_id, side, size, price, fee,
+             cash_delta, realized_delta, closed, client_order_id, note, cash_after, equity_after)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                row["ts"],
+                row["session_id"],
+                row["kind"],
+                row["market_id"],
+                row["token_id"],
+                row["side"],
+                row["size"],
+                row["price"],
+                row["fee"],
+                row["cash_delta"],
+                row["realized_delta"],
+                int(row["closed"]),
+                row["client_order_id"],
+                row["note"],
+                row["cash_after"],
+                row["equity_after"],
+            ),
+        )
+        self._conn.commit()
+
+    def save_ledger_snapshot(self, snap: LedgerSnapshot) -> None:
+        self._conn.execute(
+            """INSERT OR REPLACE INTO ledger_snapshots
+            (session_id, starting_cash, cash, realized_pnl, unrealized_pnl, fees, equity,
+             peak_equity, drawdown, session_pnl, win_rate, expectancy, closed_count,
+             positions, event_count, updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))""",
+            (
+                snap.session_id,
+                snap.starting_cash,
+                snap.cash,
+                snap.realized_pnl,
+                snap.unrealized_pnl,
+                snap.fees,
+                snap.equity,
+                snap.peak_equity,
+                snap.drawdown,
+                snap.session_pnl,
+                snap.win_rate,
+                snap.expectancy,
+                snap.closed_count,
+                json.dumps(snap.positions),
+                snap.event_count,
+            ),
+        )
+        self._conn.commit()
+
+    def list_ledger_events(self, session_id: str | None = None) -> list[dict[str, Any]]:
+        if session_id:
+            cur = self._conn.execute(
+                "SELECT * FROM ledger_events WHERE session_id=? ORDER BY id", (session_id,)
+            )
+        else:
+            cur = self._conn.execute("SELECT * FROM ledger_events ORDER BY id")
+        cols = [d[0] for d in cur.description]
+        return [dict(zip(cols, row, strict=True)) for row in cur.fetchall()]
 
     def list_signals(self) -> list[dict[str, Any]]:
         cur = self._conn.execute(

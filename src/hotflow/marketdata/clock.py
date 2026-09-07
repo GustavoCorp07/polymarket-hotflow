@@ -27,6 +27,8 @@ class LatencyProbe:
         if start is None:
             return 0.0
         elapsed = monotonic_ms() - start
+        if elapsed < 0:
+            elapsed = 0.0
         self.samples.setdefault(name, []).append(elapsed)
         return elapsed
 
@@ -36,3 +38,8 @@ class LatencyProbe:
             return None
         idx = min(len(rows) - 1, max(0, int(round((q / 100.0) * (len(rows) - 1)))))
         return rows[idx]
+
+
+def monotonic_forward(previous_ms: float, current_ms: float) -> bool:
+    """Monotonic clocks must not go backwards. Wall-clock skew is handled elsewhere."""
+    return current_ms >= previous_ms

@@ -30,6 +30,7 @@ class TradingConfig(BaseModel):
     session_id: str = "local-paper"
     paper_starting_cash: float = 10_000.0
     paper_fill_ratio: float = 0.55
+    paper_flatten_at_session_end: bool = False
     min_required_edge: float = 0.012
     min_confidence: float = 0.35
     signal_half_life_ms: float = 2_000.0
@@ -168,6 +169,19 @@ class TunerConfig(BaseModel):
     """Offline suggestions only. auto_apply cannot write production configs."""
 
     auto_apply: bool = False
+
+
+class NewsEngineConfig(BaseModel):
+    """PAPER news overlay. Impact features only; public fetch default-off."""
+
+    enabled: bool = True
+    min_source_authority: float = 0.5
+    min_confidence: float = 0.35
+    min_relevance: float = 0.4
+    already_repriced_abs: float = 0.02
+    max_p_shift: float = 0.15
+    recency_half_life_s: float = 3_600.0
+    public_fetch: bool = False
 
 
 class FairValueConfig(BaseModel):
@@ -310,6 +324,11 @@ class StorageConfig(BaseModel):
 class MonitoringConfig(BaseModel):
     prometheus_port: int = 9108
     json_logs: bool = True
+    http_enabled: bool = False
+    http_bind: str = "127.0.0.1"
+    alert_drawdown: float = 0.08
+    alert_latency_ms: float = 800.0
+    alert_slippage: float = 0.02
 
 
 class HotflowConfig(BaseModel):
@@ -333,6 +352,7 @@ class HotflowConfig(BaseModel):
     backtest: BacktestEngineConfig = Field(default_factory=BacktestEngineConfig)
     recorder: RecorderConfig = Field(default_factory=RecorderConfig)
     tuner: TunerConfig = Field(default_factory=TunerConfig)
+    news: NewsEngineConfig = Field(default_factory=NewsEngineConfig)
 
     @property
     def is_paper(self) -> bool:

@@ -26,6 +26,7 @@ class KimiRole(StrEnum):
     CODE_REVIEWER = "CODE_REVIEWER"
     PERFORMANCE_ANALYST = "PERFORMANCE_ANALYST"
     ANOMALY_INVESTIGATOR = "ANOMALY_INVESTIGATOR"
+    NEWS_CLASSIFIER = "NEWS_CLASSIFIER"
     # Mission aliases (Parte 4)
     KIMI_QUANT_RESEARCHER = "QUANT_RESEARCHER"
     KIMI_STRATEGY_CRITIC = "STRATEGY_CRITIC"
@@ -40,6 +41,10 @@ SYSTEM_PROMPTS: dict[KimiRole, str] = {
     KimiRole.CODE_REVIEWER: "You review research code for correctness and safety. Refuse to handle credentials.",
     KimiRole.PERFORMANCE_ANALYST: "You analyze sanitized performance summaries. Do not ask for keys.",
     KimiRole.ANOMALY_INVESTIGATOR: "You investigate sanitized anomalies and data-quality issues. No credentials.",
+    KimiRole.NEWS_CLASSIFIER: (
+        "You classify sanitized news text for research only. Never invent sources, "
+        "prices, or orders. Never request secrets. Cold-path only."
+    ),
 }
 
 

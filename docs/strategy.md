@@ -70,21 +70,50 @@ grammar. Per-title adapters refuse other games. Missing rules →
 `ESPORTS_STATE_MISSING`. Unparseable live score → `UNSUPPORTED_STRUCTURE`.
 Live Sports WS client stays off. Toggle: `esports.enabled`.
 
+## News / event engine (Parte 15, PAPER)
+
+News never goes to BUY/SELL. Flow:
+
+```text
+new information → classification → source validation → impact estimation
+      → quant model (p_info / confidence) → risk engine
+```
+
+Hot path is deterministic. Items are **labeled fixtures or injected
+`NewsItem`s**. The engine does not invent headlines, sources, or market moves.
+Missing labeled `claimed_p_shift` / `claimed_p_after` → `NEWS_UNVALIDATED`.
+
+Checks: source authority table, publication time, duplicate `event_key`,
+relevance to exact resolution wording, recency confidence, already-repriced
+(mid already at the labeled post-event probability).
+
+Kimi `NEWS_CLASSIFIER` is a **cold-path stub** (`hotflow.news.cold`). It is
+not imported by `evaluate_market`. Public news fetch is default-off and not
+implemented (`news.public_fetch: false`).
+
+`hotflow news-fixtures` writes a report. `paper-run --mock --news-fixtures`
+and `shadow --mock --news-fixtures` attach the same fixtures; shadow still
+logs `would_*` with `sent=false`.
+
 ## Backtest / shadow (Parte 26–28)
 
 Event-driven replay only. Book/trade events are required when HMS uses book
 features — candle-only fixtures are refused. Fill simulation applies documented
 paper latency, queue penalty, maker fill probability, and taker delay. Fees
 come from the dated fixture schedule via the official taker formula.
-Train / validation / OOS splits plus a walk-forward stub are reported.
+Train / validation / OOS splits plus `hotflow walk-forward` on existing
+closed trades (expanding or rolling; fold-size caveats). Do not pick a
+strategy by max absolute walk-forward PnL.
 Do not pick a strategy by max absolute backtest PnL.
 
 `hotflow tune` may suggest bounded threshold/weight changes from expectancy,
 drawdown, and skip codes. It never writes `configs/default.yaml` and never
 uses abs PnL as an objective.
 
-SHADOW scores the same path and records `would_buy` / `would_sell` without
-sending orders.
+SHADOW scores the same path and records `would_buy` / `would_sell` /
+`expected_price` / `actual_price_after_signal` / `simulated_fill` without
+sending orders (`sent=false`). Stale / `MAX_DATA_AGE` skips have no `would_*`
+intent. `hotflow shadow-soak` writes a multi-cycle report.
 
 ## Signal contract (Parte 46)
 

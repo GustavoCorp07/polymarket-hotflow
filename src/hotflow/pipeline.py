@@ -31,6 +31,7 @@ from hotflow.features.snapshot import build_feature_snapshot
 from hotflow.hotmarket.opportunity import score_opportunity
 from hotflow.hotmarket.score import score_hot_market
 from hotflow.hotmarket.watchlist import resource_plan
+from hotflow.marketdata.clock import monotonic_ms
 from hotflow.marketdata.freshness import FeedClock
 from hotflow.marketdata.rtds_twap import FixtureTwapSource, TwapObservationSource
 from hotflow.marketdata.sports_cache import SportsGameCache, game_state_status
@@ -45,6 +46,9 @@ from hotflow.marketdata.weather_fixtures import (
     WeatherForecastSource,
     labeled_gamma_weather_forecasts,
 )
+from hotflow.monitoring.observer import Observability
+from hotflow.news.engine import NewsEngine
+from hotflow.portfolio.ledger import PaperLedger
 from hotflow.portfolio.sizing import size_notional
 from hotflow.reason_codes import ReasonCode
 from hotflow.risk.engine import RiskEngine
@@ -147,11 +151,21 @@ class PaperPipeline:
         sports_source: SportsStateSource | None = None,
         sports_cache_path: str | Path | None = None,
         esports_source: FixtureEsportsSource | None = None,
+        obs: Observability | None = None,
+        ledger: PaperLedger | None = None,
+        news_engine: NewsEngine | None = None,
+        use_news_fixtures: bool = False,
     ) -> None:
         self.config = config
-        self.kills = KillSwitchBoard()
+        self.obs = obs or Observability.from_config(config, announce_restart=False)
+        self.kills = KillSwitchBoard(on_trip=self.obs.on_kill_event, on_reset=self.obs.note_kill_clear)
         self.risk = RiskEngine(config.risk, self.kills)
-        self.broker = PaperBroker(config.trading)
+        self.ledger = ledger or PaperLedger(
+            starting_cash=config.trading.paper_starting_cash,
+            session_id=config.trading.session_id,
+        )
+        self.broker = PaperBroker(config.trading, ledger=self.ledger)
+        self.risk.sync_from_ledger(self.ledger.snapshot())
         self.fair = CryptoFairValue()
         self.clock = FeedClock(config.feeds)
         self.store = store
@@ -178,6 +192,11 @@ class PaperPipeline:
             sports_source=sports_source,
             sports_cache_path=sports_cache_path,
         )
+        self.news = news_engine if news_engine is not None else NewsEngine(config.news)
+        if use_news_fixtures and not self.news.items:
+            from hotflow.news.fixtures import labeled_news_items
+
+            self.news.ingest_many(labeled_news_items())
 
     def _audit(self, **kwargs: Any) -> SignalAudit:
         row = SignalAudit(session_id=self.config.trading.session_id, **kwargs)
@@ -198,7 +217,61 @@ class PaperPipeline:
         p_info: float | None = None,
         now: datetime | None = None,
     ) -> dict[str, Any]:
+        started = monotonic_ms()
+        result = self._evaluate_market(market, latency_ms=latency_ms, p_info=p_info, now=now)
+        category = infer_category(market.tags, market.category)
+        peak = self.risk.state.peak_equity
+        drawdown = ((peak - self.risk.state.equity) / peak) if peak > 0 else 0.0
+        self.obs.after_evaluate(
+            result,
+            latency_ms=monotonic_ms() - started,
+            market_id=market.market_id,
+            category=category,
+            session_id=self.config.trading.session_id,
+            kill_switch=self.kills.tripped,
+            exposure=self.risk.state.total_exposure,
+            drawdown=drawdown,
+        )
+        return result
+
+    def check_external_positions(self, external_qty: dict[str, float], *, tol: float = 1e-9) -> list[str]:
+        """Compare ledger qty to a caller-supplied view. Does not invent venue balances."""
+        from hotflow.portfolio.consistency import position_mismatches
+
+        local = {token: float(qty) for token, qty in self.broker.positions.items()}
+        remote = {token: float(qty) for token, qty in external_qty.items()}
+        bad = position_mismatches(local, remote, tol=tol)
+        if bad:
+            self.kills.trip(KillSwitchReason.POSITION_MISMATCH, ",".join(bad))
+        return bad
+
+    def _evaluate_market(
+        self,
+        market: MarketRecord,
+        *,
+        latency_ms: float = 50.0,
+        p_info: float | None = None,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
         now = now or datetime.now(UTC)
+        if latency_ms < 0:
+            self._audit(
+                market_id=market.market_id,
+                accepted=False,
+                reason=ReasonCode.CLOCK_SKEW,
+                detail="negative_latency",
+            )
+            return {"accepted": False, "reason": ReasonCode.CLOCK_SKEW, "detail": "negative_latency"}
+        if market.book and market.book.fetched_at is not None:
+            skew_ms = (market.book.fetched_at - now).total_seconds() * 1000.0
+            if skew_ms > self.clock.skew_tolerance_ms:
+                self._audit(
+                    market_id=market.market_id,
+                    accepted=False,
+                    reason=ReasonCode.CLOCK_SKEW,
+                    detail="book_in_future",
+                )
+                return {"accepted": False, "reason": ReasonCode.CLOCK_SKEW, "detail": "book_in_future"}
         self.clock.touch("gamma", observed_at=market.fetched_at)
         if market.book:
             self.clock.touch("clob_book", observed_at=market.book.fetched_at)
@@ -482,6 +555,14 @@ class PaperPipeline:
             if p_info is None:
                 twap_p_info = twap_p_info_for_market(market, twap_snap)
 
+        news_impact = None
+        if self.config.news.enabled:
+            news_impact = self.news.impact_for(market, p_base=twap_p_info, now=now)
+            extras["news"] = news_impact.as_dict()
+            extras["news_orders"] = False
+            if news_impact.apply and news_impact.p_info_adjusted is not None:
+                twap_p_info = news_impact.p_info_adjusted
+
         hms = score_hot_market(market, self.config.hot_market)
         snap = build_feature_snapshot(market, hms)
         snap.extras["resource_plan"] = resource_plan(hms.tier)
@@ -499,7 +580,12 @@ class PaperPipeline:
                 hms=hms.score,
                 tier=hms.tier.value,
             )
-            return {"accepted": False, "reason": ReasonCode.MARKET_NOT_HOT, "hms": hms.score}
+            return {
+                "accepted": False,
+                "reason": ReasonCode.MARKET_NOT_HOT,
+                "hms": hms.score,
+                **extras,
+            }
 
         token_id = market.token_ids[0] if market.token_ids else "unknown"
         probe_shares = market.order_min_size or 5.0
@@ -520,6 +606,8 @@ class PaperPipeline:
             twap=twap_snap,
             prior_blend=prior_blend,
         )
+        if news_impact is not None and news_impact.apply:
+            edge = edge.model_copy(update={"confidence": min(edge.confidence, news_impact.confidence)})
         if edge.skip:
             self._audit(
                 market_id=market.market_id,
@@ -529,7 +617,7 @@ class PaperPipeline:
                 tier=hms.tier.value,
                 net_edge=edge.net_expected_edge,
             )
-            return {"accepted": False, "reason": edge.reason, "edge": edge.model_dump()}
+            return {"accepted": False, "reason": edge.reason, "edge": edge.model_dump(), **extras}
 
         notional = size_notional(
             edge,
@@ -582,7 +670,12 @@ class PaperPipeline:
                 net_edge=edge.net_expected_edge,
                 opportunity_score=opp.score,
             )
-            return {"accepted": False, "reason": decision.reason, "detail": decision.detail}
+            return {
+                "accepted": False,
+                "reason": decision.reason,
+                "detail": decision.detail,
+                **extras,
+            }
 
         quality = signal_quality(
             opp,
@@ -610,7 +703,7 @@ class PaperPipeline:
                 hms=hms.score,
                 net_edge=edge.net_expected_edge,
                 opportunity_score=opp.score,
-                extra={**shadow, "signal": quality},
+                extra={**shadow, "signal": quality, **extras},
             )
             return {
                 "accepted": False,
@@ -621,6 +714,7 @@ class PaperPipeline:
                 "shares": shares,
                 "style": style.value,
                 **shadow,
+                **extras,
             }
 
         if self.config.is_backtest:
@@ -653,26 +747,42 @@ class PaperPipeline:
             self._audit(market_id=market.market_id, accepted=False, reason=ReasonCode.LIVE_GATES_BLOCKED)
             return {"accepted": False, "reason": ReasonCode.LIVE_GATES_BLOCKED}
 
+        order_started = monotonic_ms()
         order = self.broker.create(opp, price=edge.market_price, size=shares)
         order = self.broker.submit(order.client_order_id)
         filled_before = order.filled_size
-        order = self.broker.simulate_fill(order.client_order_id)
+        order = self.broker.simulate_fill(
+            order.client_order_id,
+            fee_per_share=float(edge.fee_per_share or 0.0),
+        )
+        self.obs.observe_order_latency(monotonic_ms() - order_started)
+        fill_event = self.broker.last_fill_event
         self.risk.state.open_orders = sum(
             1
             for o in self.broker.orders.values()
             if o.status.value in {"SUBMITTED", "ACKNOWLEDGED", "PARTIAL"}
         )
         self.risk.state.last_order_at = now
+        realized_delta = fill_event.realized_delta if fill_event is not None else 0.0
         self.risk.note_fill(
             market_id=market.market_id,
             category=category,
             notional=order.filled_size * (order.avg_fill_price or order.price),
+            pnl_delta=realized_delta,
         )
+        self.risk.sync_from_ledger(self.ledger.snapshot())
+        self.risk.enforce_session_limits()
+        if fill_event is not None and fill_event.closed:
+            self.obs.metrics.note_closed_trade(fill_event.realized_delta)
+        self.obs.publish_ledger(self.ledger.snapshot())
         if self.store:
             self.store.save_order(order)
             delta = order.filled_size - filled_before
             if delta > 0:
                 self.store.save_trade(order, delta, order.avg_fill_price or order.price)
+            if fill_event is not None:
+                self.store.save_ledger_event(fill_event)
+            self.store.save_ledger_snapshot(self.ledger.snapshot())
         self._audit(
             market_id=market.market_id,
             accepted=True,
@@ -755,8 +865,10 @@ class PaperPipeline:
             try:
                 markets = await scanner.scan(use_network=use_network)
             except Exception as exc:  # noqa: BLE001
+                self.obs.note_api_error("scanner", type(exc).__name__)
                 return {"ok": False, "error": type(exc).__name__, "markets": 0, "audits": []}
         results = [self.evaluate_market(m) for m in markets]
+        self.obs.snapshot_pipeline(self)
         return {
             "ok": True,
             "mode": self.config.trading.mode,

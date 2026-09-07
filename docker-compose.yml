@@ -12,5 +12,6 @@ services:
       - ./reports:/app/reports
       - ./data:/app/data
     command: ["hotflow", "paper-run", "--cycles", "1"]
+    # Optional scrape: change command to serve-metrics (still PAPER, no orders).
     ports:
       - "9108:9108"

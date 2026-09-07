@@ -52,6 +52,22 @@ hotflow backtest --fixture tests/fixtures/backtest/crypto_longer_synthetic.json
 hotflow record-stream --mock
 hotflow tune --report reports/backtest-*.json --write-suggestion reports/tune-suggestion.yaml
 hotflow shadow --mock
+hotflow shadow-soak --cycles 5
+hotflow failure-soak
+hotflow live-gates
+hotflow readiness
+hotflow news-fixtures
+hotflow performance --from-reports reports
+hotflow decay --from-reports reports
+hotflow walk-forward --from-reports reports
+hotflow paper-run --mock --cycles 3 --flatten
+hotflow paper-soak --cycles 5
+hotflow paper-soak --long --target-closes 50
+
+# Optional localhost observability (PAPER only; off by default)
+hotflow serve-metrics
+hotflow paper-run --mock --serve-metrics
+# scrape http://127.0.0.1:9108/metrics  /health  /ready
 ```
 
 Reports land in `reports/`. SQLite state lands in `data/hotflow.sqlite`.
@@ -92,6 +108,8 @@ LIVE is a no-op unless:
 | `HOTFLOW_ACCEPT_LIVE` | `1` |
 
 Missing any gate keeps transmit closed. Paper remains the supported path.
+`hotflow live-gates` prints each gate and exits 1 if any is unexpectedly open.
+Signing is **not implemented**; `place_order` / `cancel_order` refuse.
 
 ## Tests and CI
 
@@ -105,7 +123,10 @@ GitHub Actions runs lint, typecheck, pytest, and a mock paper-run smoke.
 
 ## Package layout
 
-`src/hotflow/{discovery,marketdata,hotmarket,features,fairvalue,strategies,risk,execution,portfolio,storage,analytics,ai_research,monitoring}`
+`src/hotflow/{discovery,marketdata,hotmarket,features,fairvalue,news,strategies,risk,execution,portfolio,storage,analytics,ai_research,monitoring}`
+
+News (Parte 15) is fixture-only on the hot path: classify → validate →
+impact features → existing FV/risk. It never becomes BUY/SELL.
 
 Weather and sports PAPER adapters parse resolution rules before trading.
 Forecasts never replace the official weather source. Sports uses official WS
@@ -115,7 +136,8 @@ can be scored without inventing map/economy math. Official RTDS 30s/60s TWAP pap
 by default; optional unauthenticated live client off). WS reconnect/heartbeat,
 event-driven backtester (`hotflow backtest --fixture`), shadow
 `would_buy` / `would_sell` logs, Prometheus + JSON logs, and the offline
-tuner stay in PAPER/BACKTEST/SHADOW (no LIVE).
+tuner stay in PAPER/BACKTEST/SHADOW (no LIVE). JSON logs redact secrets.
+Prometheus + `/health` `/ready` are localhost-only and default-off.
 
 ## TWAP paper path
 
