@@ -128,7 +128,15 @@ class MetricsRegistry:
         )
 
     def registered_names(self) -> set[str]:
-        return {metric.name for metric in self.registry.collect()}
+        names: set[str] = set()
+        for metric in self.registry.collect():
+            names.add(metric.name)
+            if metric.type == "counter":
+                # Family name omits _total until a labeled child exists.
+                names.add(f"{metric.name}_total")
+            for sample in metric.samples:
+                names.add(sample.name)
+        return names
 
     def note_closed_trade(self, pnl: float) -> None:
         self._closed += 1

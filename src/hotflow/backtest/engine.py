@@ -317,7 +317,7 @@ class EventDrivenBacktester:
         fixture_path: str | None,
         detail: str,
     ) -> dict[str, Any]:
-        payload = {
+        payload: dict[str, Any] = {
             "mode": "backtest",
             "fixture": fixture_path,
             "accepted": False,

@@ -11,11 +11,11 @@ import typer
 
 from hotflow.config import load_config
 from hotflow.execution.live_gate import live_gates_open
-from hotflow.monitoring.observer import Observability, http_enabled
 from hotflow.marketdata.sports_cache import SportsGameCache
 from hotflow.marketdata.sports_fixtures import default_sports_cache_fixtures
 from hotflow.marketdata.twap_cache import TwapPrintCache
 from hotflow.marketdata.twap_fixtures import default_paper_fixtures
+from hotflow.monitoring.observer import Observability, http_enabled
 from hotflow.pipeline import (
     PaperPipeline,
     demo_market,

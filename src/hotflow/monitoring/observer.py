@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import time
+from http.server import ThreadingHTTPServer
 from typing import Any
 
 from hotflow.config import HotflowConfig, MonitoringConfig
@@ -14,7 +15,6 @@ from hotflow.monitoring.http import start_metrics_server, stop_metrics_server
 from hotflow.monitoring.json_logs import JsonLogger
 from hotflow.monitoring.metrics import MetricsRegistry
 from hotflow.risk.kill_switch import KillEvent
-from hotflow.types import KillSwitchReason
 
 
 def http_enabled(config: HotflowConfig) -> bool:
@@ -42,7 +42,7 @@ class Observability:
         self.logger = logger or JsonLogger()
         self.health = HealthState(mode=self.config.trading.mode)
         self.alerts = alerts or AlertRouter(self.logger, on_emit=self._on_alert)
-        self._http = None
+        self._http: ThreadingHTTPServer | None = None
         self._drawdown_alerted = False
         self.metrics.process_start.set(time.time())
         self.metrics.kill.set(0)
@@ -195,14 +195,16 @@ class Observability:
         decision = "TRADE" if accepted else "SKIP"
         if reason == "SHADOW_MODE":
             decision = "SHADOW"
-        edge = result.get("edge") if isinstance(result.get("edge"), dict) else {}
-        opp = result.get("opportunity") if isinstance(result.get("opportunity"), dict) else {}
+        edge_raw = result.get("edge")
+        opp_raw = result.get("opportunity")
+        edge: dict[str, Any] = edge_raw if isinstance(edge_raw, dict) else {}
+        opp: dict[str, Any] = opp_raw if isinstance(opp_raw, dict) else {}
         hms = result.get("hms")
         if hms is None:
-            nested = opp.get("hms")
-            if isinstance(nested, dict):
-                hms = nested.get("score")
-        net_edge = edge.get("net_expected_edge") if edge else None
+            nested_hms = opp.get("hms")
+            if isinstance(nested_hms, dict):
+                hms = nested_hms.get("score")
+        net_edge = edge.get("net_expected_edge")
         opp_score = opp.get("score")
         if self.mon.json_logs:
             self.logger.signal(
@@ -222,7 +224,8 @@ class Observability:
         self.observe_signal_latency(latency_ms)
         if hms is not None:
             tier = "unknown"
-            nested = opp.get("hms") if isinstance(opp.get("hms"), dict) else {}
+            nested_hms = opp.get("hms")
+            nested: dict[str, Any] = nested_hms if isinstance(nested_hms, dict) else {}
             if nested.get("tier"):
                 tier = str(nested["tier"])
             self.metrics.hms.labels(tier=tier).set(float(hms))
@@ -294,7 +297,8 @@ class Observability:
             )
 
     def observe_backtest_report(self, report: dict[str, Any]) -> None:
-        metrics = report.get("metrics") if isinstance(report.get("metrics"), dict) else {}
+        metrics_raw = report.get("metrics")
+        metrics: dict[str, Any] = metrics_raw if isinstance(metrics_raw, dict) else {}
         self.set_equity_pnl(
             realized=float(metrics.get("abs_pnl") or 0.0),
             daily=float(metrics.get("abs_pnl") or 0.0),
@@ -308,7 +312,8 @@ class Observability:
             self.metrics.fees.inc(fees)
         if slip:
             self.metrics.slippage.inc(slip)
-        trades = report.get("trades") if isinstance(report.get("trades"), list) else []
+        trades_raw = report.get("trades")
+        trades: list[Any] = trades_raw if isinstance(trades_raw, list) else []
         for trade in trades:
             if not isinstance(trade, dict):
                 continue

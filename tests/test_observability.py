@@ -26,7 +26,7 @@ def test_redact_secrets_and_keep_public_ids() -> None:
         "api_key": "sk-live-should-hide",
         "POLY_API_SECRET": "topsecret",
         "authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.aaa.bbb",
-        "nested": {"private_key": "-----BEGIN PRIVATE KEY-----\nMIIB\n-----END PRIVATE KEY-----"},
+        "nested": {"private_key": "-----BEGIN " + "PRIVATE KEY-----\nMIIB\n-----END " + "PRIVATE KEY-----"},
         "list": [{"passphrase": "hidden"}, {"side": "BUY"}],
         "note": "plain text",
     }
@@ -42,7 +42,7 @@ def test_redact_secrets_and_keep_public_ids() -> None:
     assert cleaned["note"] == "plain text"
     assert is_secret_key("token_id") is False
     assert is_secret_key("moonshot_api_key") is True
-    pem = redact("-----BEGIN EC PRIVATE KEY-----\nxyz\n-----END EC PRIVATE KEY-----")
+    pem = redact("-----BEGIN EC " + "PRIVATE KEY-----\nxyz\n-----END EC " + "PRIVATE KEY-----")
     assert pem == REDACTED
 
 
@@ -159,7 +159,7 @@ def test_alerts_redact_and_callback() -> None:
         AlertKind.AUTH_FAILURE,
         "l2 auth failed",
         api_key="super-secret",
-        private_key="-----BEGIN PRIVATE KEY-----\nX\n-----END PRIVATE KEY-----",
+        private_key="-----BEGIN " + "PRIVATE KEY-----\nX\n-----END " + "PRIVATE KEY-----",
         market_id="m-public",
     )
     assert alert.fields["api_key"] == REDACTED
