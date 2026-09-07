@@ -13,7 +13,14 @@ from hotflow.config import load_config
 from hotflow.execution.live_gate import live_gates_open
 from hotflow.marketdata.twap_cache import TwapPrintCache
 from hotflow.marketdata.twap_fixtures import default_paper_fixtures
-from hotflow.pipeline import PaperPipeline, demo_market, demo_twap_market, write_report
+from hotflow.pipeline import (
+    PaperPipeline,
+    demo_market,
+    demo_sports_nba_market,
+    demo_twap_market,
+    demo_weather_market,
+    write_report,
+)
 from hotflow.storage.sqlite_store import SqliteStore
 
 app = typer.Typer(help="POLYMARKET HOTFLOW — paper-first quant system")
@@ -29,6 +36,13 @@ def _attach_rtds(cfg, mock: bool, rtds_live: bool) -> bool:
     return bool(rtds_live or cfg.feeds.rtds.subscriber_enabled)
 
 
+def _prepare_mock_config(cfg):
+    """--mock evaluates several fixtures in one process tick; skip inter-order cooldown."""
+    cfg.risk.cooldown_ms = 0
+    cfg.risk.cooldown_after_losses_ms = 0
+    return cfg
+
+
 @app.command()
 def scan(
     config: Path | None = typer.Option(None, "--config", "-c"),
@@ -41,13 +55,20 @@ def scan(
 ) -> None:
     """Scan Gamma + public CLOB and write a report. Never places live orders."""
     cfg = load_config(config)
+    if mock:
+        cfg = _prepare_mock_config(cfg)
     store = _store(cfg)
     pipe = PaperPipeline(cfg, store, use_twap_fixtures=mock, cache_path=twap_cache)
 
     async def _run() -> dict:
         if mock:
-            markets = [demo_twap_market(hot=True), demo_market(hot=False)]
-            markets[1].market_id = "demo-cold"
+            markets = [
+                demo_twap_market(hot=True),
+                demo_weather_market(hot=True),
+                demo_sports_nba_market(hot=True),
+                demo_market(hot=False),
+            ]
+            markets[-1].market_id = "demo-cold"
             return await pipe.run_scan(
                 markets=markets,
                 use_network=False,
@@ -76,20 +97,25 @@ def paper_run(
     cfg = load_config(config)
     if cfg.trading.mode.lower() == "live" and not live_gates_open(cfg):
         raise typer.BadParameter("LIVE gates closed; staying out of transmit. Use paper.")
+    if mock:
+        cfg = _prepare_mock_config(cfg)
     store = _store(cfg)
     summaries: list[dict[str, Any]] = []
     for _cycle in range(max(1, cycles)):
         pipe = PaperPipeline(cfg, store, use_twap_fixtures=mock, cache_path=twap_cache)
         if mock:
-            market = demo_twap_market(hot=True)
-            result = pipe.evaluate_market(market)
+            results = [
+                pipe.evaluate_market(demo_twap_market(hot=True)),
+                pipe.evaluate_market(demo_weather_market(hot=True)),
+                pipe.evaluate_market(demo_sports_nba_market(hot=True)),
+            ]
             summaries.append(
                 {
                     "ok": True,
                     "mode": cfg.trading.mode,
-                    "markets": 1,
-                    "accepted": int(bool(result.get("accepted"))),
-                    "results": [result],
+                    "markets": len(results),
+                    "accepted": sum(1 for item in results if item.get("accepted")),
+                    "results": results,
                     "audits": [a.model_dump(mode="json") for a in pipe.audits],
                 }
             )

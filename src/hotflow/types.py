@@ -165,6 +165,71 @@ class TwapSnapshot(BaseModel):
     skip_reason: str | None = None
 
 
+class WeatherResolutionSpec(BaseModel):
+    city: str | None = None
+    station: str | None = None
+    metric: str | None = None
+    unit: str | None = None
+    time_window: str | None = None
+    timezone: str | None = None
+    rounding_rule: str | None = None
+    threshold: float | None = None
+    source: str | None = None
+    parse_confidence: float = 0.0
+    complete: bool = False
+    skip_reason: str | None = None
+    source_text: str = ""
+
+
+class WeatherForecast(BaseModel):
+    """External forecast features only — never a substitute for resolution source."""
+
+    mean: float | None = None
+    median: float | None = None
+    std: float | None = None
+    p_above_threshold: float | None = None
+    ensemble_spread: float | None = None
+    source: str = "fixture"
+    observed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class SportsResolutionSpec(BaseModel):
+    league: str | None = None
+    home_team: str | None = None
+    away_team: str | None = None
+    period: str | None = None
+    live: bool | None = None
+    ended: bool | None = None
+    score: str | None = None
+    sports_market_type: str | None = None
+    game_start: str | None = None
+    source: str | None = None
+    parse_confidence: float = 0.0
+    complete: bool = False
+    skip_reason: str | None = None
+    source_text: str = ""
+
+
+class SportsGameState(BaseModel):
+    """Official Sports WS game object fields only (raw or SDK payload)."""
+
+    game_id: int | None = None
+    league_abbreviation: str | None = None
+    home_team: str | None = None
+    away_team: str | None = None
+    status: str | None = None
+    live: bool | None = None
+    ended: bool | None = None
+    score: str | None = None
+    period: str | None = None
+    elapsed: str | None = None
+    slug: str | None = None
+    turn: str | None = None
+    finished_at: str | None = None
+    last_update: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    source: str = "fixture"
+
+
 class ResolutionMeta(BaseModel):
     source: str | None = None
     uma_status: str | None = None

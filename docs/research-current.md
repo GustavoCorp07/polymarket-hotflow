@@ -70,6 +70,7 @@ server-side — omit them.
 | CLOB Market WS | Text frame `PING` every **10 seconds**; server replies `PONG` ([realtime-data](https://docs.polymarket.com/market-data/realtime-data), [user channel](https://docs.polymarket.com/api-reference/wss/user)) |
 | CLOB User WS | Same: `PING` every **10 seconds** |
 | RTDS | Text frame `PING` every **5 seconds** ([chainlink-twap](https://docs.polymarket.com/market-data/chainlink-twap), [realtime-data](https://docs.polymarket.com/market-data/realtime-data)) |
+| Sports WS | **Server** sends text `ping` every **5 seconds**; client replies `pong` within **10 seconds** ([realtime-data](https://docs.polymarket.com/market-data/realtime-data)). Opposite of CLOB/RTDS client-`PING`. |
 
 ### Discovery (Gamma)
 
@@ -217,6 +218,47 @@ Optional live public RTDS client: `PublicRtdsTwapClient` (off by default,
 - `hotflow paper-run --twap-cache data/rtds_twap_cache.json` injects a cache
   for a Gamma/paper cycle without a socket
 
+### Sports WebSocket (do not invent fields)
+
+Re-verified **2026-09-07** from
+[Realtime data](https://docs.polymarket.com/market-data/realtime-data).
+
+| Item | Official value |
+| --- | --- |
+| URL | `wss://sports-api.polymarket.com/ws` (public, **no subscribe frame**) |
+| Heartbeat | server `ping` every **5s**; reply `pong` within **10s** |
+| Raw WS | **no envelope** — each message is the game object |
+| SDK envelope | `topic: sports`, `type: sport_result` |
+| Fields | `gameId`, `leagueAbbreviation`, `homeTeam`, `awayTeam`, `status`, `live`, `ended`, `score` (combined `"-"`), `period`, `elapsed`, `slug`, `turn` (NFL/CFB), `finishedAt` / `finished_timestamp`, `sportradarGameId` |
+| Documented leagues | `NFL`, `NHL`, `MLB`, `NBA`, `CBB`, `CFB`, `Soccer`, `Esports`, `Tennis` |
+| Periods | `1H`/`2H`, `1Q`–`4Q`, `HT`, `FT`, `FT OT`, `FT NR`, MLB `End N`, maps `1/3`… (example payload also uses `Q4`) |
+| Status | **case-sensitive and sport-specific** (do not reuse NBA statuses on Soccer/Tennis/Esports) |
+
+HOTFLOW paper sports path:
+
+- parses league/teams from Gamma metadata using only documented league names
+- never maps `football` → `Soccer`
+- injects official-shape game frames in pytest; live client stays **off**
+  (`sports.live_public_client: false`)
+- per-sport models: NBA/CBB basketball ≠ Soccer; Tennis/NFL/… → `UNSUPPORTED_SPORT`
+- missing rules or game state → `SPORTS_RULES_UNKNOWN` / `SPORTS_STATE_MISSING`
+
+### Weather (no official Polymarket observation API)
+
+Official Polymarket docs do **not** publish a weather observation WebSocket or
+resolution-observation endpoint. Do **not** invent one.
+
+HOTFLOW paper weather path:
+
+- parses city / station / metric / unit / window / timezone / rounding /
+  threshold / **source** from market text
+- if the official source is missing or confidence is low → `WEATHER_RULES_UNKNOWN`
+  (never guess the resolver)
+- external forecasts are **features only** (`WeatherForecast.source=fixture` in
+  tests). They are never a substitute for the official resolution source
+- missing forecast distribution → `WEATHER_FORECAST_MISSING`
+- pytest uses labeled fixtures only — no paid weather APIs
+
 ### Official Python SDK (optional)
 
 Package `polymarket-client` ≥ 0.3.0 —
@@ -232,3 +274,6 @@ Paper scan uses public HTTP so tests do not require the SDK.
 - Homegrown TWAP or “last price = fill” rules  
 - User-WS without L2 credentials  
 - LIVE transmit without the acceptance gates in `docs/architecture.md`
+- A Polymarket weather observation API or unofficial weather station  
+- Sports leagues, odds, or period/status values outside the official Sports WS schema  
+- One probabilistic sports model reused across football / basketball / tennis / soccer

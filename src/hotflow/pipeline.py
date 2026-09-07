@@ -11,20 +11,37 @@ from hotflow.analytics.experiments import git_commit
 from hotflow.analytics.pnl_velocity import pnl_velocity
 from hotflow.analytics.signal_quality import signal_quality
 from hotflow.config import HotflowConfig
-from hotflow.discovery.resolution import parse_resolution, parse_twap_resolution
+from hotflow.discovery.resolution import (
+    parse_resolution,
+    parse_sports_resolution,
+    parse_twap_resolution,
+    parse_weather_resolution,
+)
 from hotflow.discovery.scanner import UniverseScanner, infer_category
 from hotflow.execution.live_gate import live_gates_open
 from hotflow.execution.paper import PaperBroker
 from hotflow.fairvalue.crypto import CryptoFairValue
 from hotflow.fairvalue.maker_taker import choose_style
+from hotflow.fairvalue.sports import sports_model_for
 from hotflow.fairvalue.twap import compute_twap_snapshot, time_remaining_seconds, twap_p_info_for_market
+from hotflow.fairvalue.weather import weather_p_above_threshold
 from hotflow.features.snapshot import build_feature_snapshot
 from hotflow.hotmarket.opportunity import score_opportunity
 from hotflow.hotmarket.score import score_hot_market
 from hotflow.hotmarket.watchlist import resource_plan
 from hotflow.marketdata.freshness import FeedClock
 from hotflow.marketdata.rtds_twap import FixtureTwapSource, TwapObservationSource
+from hotflow.marketdata.sports_ws import (
+    FixtureSportsSource,
+    SportsStateSource,
+    game_state_from_metadata,
+)
 from hotflow.marketdata.twap_cache import TwapPrintCache, observation_status
+from hotflow.marketdata.weather_fixtures import (
+    FixtureWeatherSource,
+    WeatherForecastSource,
+    default_weather_forecast,
+)
 from hotflow.portfolio.sizing import size_notional
 from hotflow.reason_codes import ReasonCode
 from hotflow.risk.engine import RiskEngine
@@ -37,6 +54,7 @@ from hotflow.types import (
     OrderBook,
     Side,
     SignalAudit,
+    SportsGameState,
     TwapSnapshot,
 )
 
@@ -92,6 +110,8 @@ class PaperPipeline:
         twap_source: TwapObservationSource | None = None,
         use_twap_fixtures: bool = False,
         cache_path: str | Path | None = None,
+        weather_source: WeatherForecastSource | None = None,
+        sports_source: SportsStateSource | None = None,
     ) -> None:
         self.config = config
         self.kills = KillSwitchBoard()
@@ -107,6 +127,21 @@ class PaperPipeline:
             twap_source=twap_source,
             cache_path=cache_path,
         )
+        if weather_source is not None:
+            self.weather_source = weather_source
+        elif use_twap_fixtures:
+            src = FixtureWeatherSource()
+            src.put("chicago", default_weather_forecast())
+            src.put("default", default_weather_forecast())
+            self.weather_source = src
+        else:
+            self.weather_source = FixtureWeatherSource()
+        if sports_source is not None:
+            self.sports_source = sports_source
+        elif use_twap_fixtures:
+            self.sports_source = FixtureSportsSource([default_nba_state(), default_soccer_state()])
+        else:
+            self.sports_source = FixtureSportsSource()
 
     def _audit(self, **kwargs: Any) -> SignalAudit:
         row = SignalAudit(session_id=self.config.trading.session_id, **kwargs)
@@ -157,9 +192,95 @@ class PaperPipeline:
             self._audit(market_id=market.market_id, accepted=False, reason=ReasonCode.UNKNOWN_RESOLUTION)
             return {"accepted": False, "reason": ReasonCode.UNKNOWN_RESOLUTION}
 
+        if category == "esports":
+            self._audit(market_id=market.market_id, accepted=False, reason=ReasonCode.UNSUPPORTED_STRUCTURE)
+            return {"accepted": False, "reason": ReasonCode.UNSUPPORTED_STRUCTURE}
+
         twap_spec = parse_twap_resolution(market)
         twap_snap: TwapSnapshot | None = None
         twap_p_info = p_info
+        extras: dict[str, Any] = {}
+
+        if category == "weather":
+            if not self.config.weather.enabled:
+                self._audit(market_id=market.market_id, accepted=False, reason=ReasonCode.CATEGORY_DISABLED)
+                return {"accepted": False, "reason": ReasonCode.CATEGORY_DISABLED}
+            weather_spec = parse_weather_resolution(market)
+            extras["weather_spec"] = weather_spec.model_dump()
+            if (
+                not weather_spec.complete
+                or weather_spec.parse_confidence < self.config.weather.min_parse_confidence
+            ):
+                reason = weather_spec.skip_reason or ReasonCode.UNKNOWN_RESOLUTION
+                self._audit(market_id=market.market_id, accepted=False, reason=reason, extra=extras)
+                return {"accepted": False, "reason": reason, "weather_spec": weather_spec.model_dump()}
+            forecast = self.weather_source.latest(weather_spec)
+            if forecast is None:
+                self._audit(
+                    market_id=market.market_id,
+                    accepted=False,
+                    reason=ReasonCode.WEATHER_FORECAST_MISSING,
+                    extra=extras,
+                )
+                return {"accepted": False, "reason": ReasonCode.WEATHER_FORECAST_MISSING}
+            extras["weather_forecast"] = forecast.model_dump(mode="json")
+            weather_p = weather_p_above_threshold(weather_spec, forecast)
+            if weather_p is None:
+                self._audit(
+                    market_id=market.market_id,
+                    accepted=False,
+                    reason=ReasonCode.WEATHER_FORECAST_MISSING,
+                    extra=extras,
+                )
+                return {"accepted": False, "reason": ReasonCode.WEATHER_FORECAST_MISSING}
+            if p_info is None:
+                twap_p_info = weather_p
+
+        if category == "sports":
+            if not self.config.sports.enabled:
+                self._audit(market_id=market.market_id, accepted=False, reason=ReasonCode.CATEGORY_DISABLED)
+                return {"accepted": False, "reason": ReasonCode.CATEGORY_DISABLED}
+            sports_spec = parse_sports_resolution(market)
+            extras["sports_spec"] = sports_spec.model_dump()
+            if (
+                not sports_spec.complete
+                or sports_spec.parse_confidence < self.config.sports.min_parse_confidence
+            ):
+                reason = sports_spec.skip_reason or ReasonCode.UNKNOWN_RESOLUTION
+                self._audit(market_id=market.market_id, accepted=False, reason=reason, extra=extras)
+                return {"accepted": False, "reason": reason, "sports_spec": sports_spec.model_dump()}
+            model = sports_model_for(sports_spec.league)
+            if model is None:
+                self._audit(
+                    market_id=market.market_id,
+                    accepted=False,
+                    reason=ReasonCode.UNSUPPORTED_SPORT,
+                    extra=extras,
+                )
+                return {"accepted": False, "reason": ReasonCode.UNSUPPORTED_SPORT, "league": sports_spec.league}
+            state = self.sports_source.latest(sports_spec) or game_state_from_metadata(sports_spec)
+            if state is None:
+                self._audit(
+                    market_id=market.market_id,
+                    accepted=False,
+                    reason=ReasonCode.SPORTS_STATE_MISSING,
+                    extra=extras,
+                )
+                return {"accepted": False, "reason": ReasonCode.SPORTS_STATE_MISSING}
+            extras["sports_state"] = state.model_dump(mode="json")
+            extras["sports_model"] = model.sport
+            sports_p = model.p_home_win(sports_spec, state)
+            if sports_p is None:
+                self._audit(
+                    market_id=market.market_id,
+                    accepted=False,
+                    reason=ReasonCode.SPORTS_STATE_MISSING,
+                    extra=extras,
+                )
+                return {"accepted": False, "reason": ReasonCode.SPORTS_STATE_MISSING}
+            if p_info is None:
+                twap_p_info = sports_p
+
         if self.config.fair_value.crypto.twap.enabled and twap_spec.is_twap_market:
             if not twap_spec.complete:
                 reason = twap_spec.skip_reason or ReasonCode.UNKNOWN_RESOLUTION
@@ -221,6 +342,7 @@ class PaperPipeline:
         hms = score_hot_market(market, self.config.hot_market)
         snap = build_feature_snapshot(market, hms)
         snap.extras["resource_plan"] = resource_plan(hms.tier)
+        snap.extras.update(extras)
         if twap_snap is not None:
             snap.extras["twap"] = twap_snap.model_dump()
         if self.store:
@@ -238,6 +360,11 @@ class PaperPipeline:
 
         token_id = market.token_ids[0] if market.token_ids else "unknown"
         probe_shares = market.order_min_size or 5.0
+        prior_blend = None
+        if category == "weather":
+            prior_blend = self.config.weather.prior_blend
+        elif category == "sports":
+            prior_blend = self.config.sports.prior_blend
         edge = self.fair.evaluate(
             market,
             side=Side.BUY,
@@ -246,6 +373,7 @@ class PaperPipeline:
             config=self.config.fair_value,
             p_info=twap_p_info,
             twap=twap_snap,
+            prior_blend=prior_blend,
         )
         if edge.skip:
             self._audit(
@@ -368,6 +496,7 @@ class PaperPipeline:
                 "git_commit": git_commit(),
                 "strategy_version": self.config.experiment.version,
                 "twap": twap_snap.model_dump() if twap_snap else None,
+                **extras,
             },
         )
         return {
@@ -376,6 +505,7 @@ class PaperPipeline:
             "order": order.model_dump(mode="json"),
             "edge": edge.model_dump(),
             "twap": twap_snap.model_dump() if twap_snap else None,
+            **extras,
         }
 
     async def run_scan(
@@ -424,6 +554,176 @@ def write_report(path: Path, payload: dict[str, Any]) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
     return path
+
+
+def default_nba_state() -> SportsGameState:
+    return SportsGameState(
+        game_id=5127839,
+        league_abbreviation="NBA",
+        home_team="Los Angeles Lakers",
+        away_team="Boston Celtics",
+        status="InProgress",
+        live=True,
+        ended=False,
+        score="110-90",
+        period="Q4",
+        elapsed="05:12",
+        source="fixture",
+    )
+
+
+def default_soccer_state() -> SportsGameState:
+    return SportsGameState(
+        game_id=9001,
+        league_abbreviation="Soccer",
+        home_team="Arsenal",
+        away_team="Chelsea",
+        status="InProgress",
+        live=True,
+        ended=False,
+        score="2-0",
+        period="2H",
+        elapsed="75:00",
+        source="fixture",
+    )
+
+
+def demo_weather_market(*, hot: bool = True) -> MarketRecord:
+    """Deterministic weather fixture with explicit official-source wording."""
+    from datetime import timedelta
+
+    market = demo_market(hot=hot)
+    close = (datetime.now(UTC) + timedelta(hours=12)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    source = (
+        "National Weather Service ASOS observations at station KORD (Chicago O'Hare). "
+        "Official high temperature for the local calendar day in America/Chicago, "
+        "rounded to the nearest degree Fahrenheit. Resolves Yes if the official high "
+        "is above 70. City: Chicago."
+    )
+    market.market_id = "demo-weather-chicago"
+    market.slug = "demo-weather-chicago"
+    market.category = "weather"
+    market.tags = ["weather", "temperature"]
+    market.question = "Will the official high temperature in Chicago be above 70°F?"
+    market.raw_gamma = {
+        "description": source,
+        "resolutionSource": source,
+        "line": 70,
+        "endDate": close,
+    }
+    market.resolution = parse_resolution(
+        {"resolutionSource": source, "endDate": close, "line": 70, "description": source}
+    )
+    return market
+
+
+def demo_sports_nba_market(*, hot: bool = True) -> MarketRecord:
+    """Deterministic NBA moneyline fixture using official Sports WS field names."""
+    from datetime import timedelta
+
+    market = demo_market(hot=hot)
+    start = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    close = (datetime.now(UTC) + timedelta(hours=3)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    source = "Official NBA scoreboard via Polymarket Sports WebSocket sport_result fields."
+    market.market_id = "demo-nba-lal-bos"
+    market.slug = "demo-nba-lal-bos"
+    market.category = "sports"
+    market.tags = ["sports", "nba"]
+    market.question = "Los Angeles Lakers vs Boston Celtics"
+    market.outcomes = ["Los Angeles Lakers", "Boston Celtics"]
+    market.raw_gamma = {
+        "description": source,
+        "resolutionSource": source,
+        "endDate": close,
+        "leagueAbbreviation": "NBA",
+        "homeTeam": "Los Angeles Lakers",
+        "awayTeam": "Boston Celtics",
+        "sportsMarketType": "moneyline",
+        "gameStartTime": start,
+    }
+    market.resolution = parse_resolution(
+        {
+            "resolutionSource": source,
+            "endDate": close,
+            "sportsMarketType": "moneyline",
+            "gameStartTime": start,
+        }
+    )
+    return market
+
+
+def demo_sports_soccer_market(*, hot: bool = True) -> MarketRecord:
+    """Deterministic Soccer moneyline fixture. League is official 'Soccer', not an invented abbrev."""
+    from datetime import timedelta
+
+    market = demo_market(hot=hot)
+    start = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    close = (datetime.now(UTC) + timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    source = "Official soccer scoreboard via Polymarket Sports WebSocket sport_result fields."
+    market.market_id = "demo-soccer-ars-che"
+    market.slug = "demo-soccer-ars-che"
+    market.category = "sports"
+    market.tags = ["sports", "soccer"]
+    market.question = "Arsenal vs Chelsea"
+    market.outcomes = ["Arsenal", "Chelsea"]
+    market.raw_gamma = {
+        "description": source,
+        "resolutionSource": source,
+        "endDate": close,
+        "leagueAbbreviation": "Soccer",
+        "homeTeam": "Arsenal",
+        "awayTeam": "Chelsea",
+        "sportsMarketType": "moneyline",
+        "gameStartTime": start,
+    }
+    market.resolution = parse_resolution(
+        {
+            "resolutionSource": source,
+            "endDate": close,
+            "sportsMarketType": "moneyline",
+            "gameStartTime": start,
+        }
+    )
+    return market
+
+
+def demo_sports_tennis_market(*, hot: bool = True) -> MarketRecord:
+    """Complete tennis identity — model must refuse rather than reuse NBA/Soccer."""
+    from datetime import timedelta
+
+    market = demo_market(hot=hot)
+    start = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    close = (datetime.now(UTC) + timedelta(hours=4)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    source = "Official tennis scoreboard via Polymarket Sports WebSocket sport_result fields."
+    market.market_id = "demo-tennis"
+    market.slug = "demo-tennis"
+    market.category = "sports"
+    market.tags = ["sports", "tennis"]
+    market.question = "Player A vs Player B"
+    market.outcomes = ["Player A", "Player B"]
+    market.raw_gamma = {
+        "description": source,
+        "resolutionSource": source,
+        "endDate": close,
+        "leagueAbbreviation": "Tennis",
+        "homeTeam": "Player A",
+        "awayTeam": "Player B",
+        "sportsMarketType": "moneyline",
+        "gameStartTime": start,
+        "score": "2-1",
+        "period": "3/5",
+        "live": True,
+        "ended": False,
+    }
+    market.resolution = parse_resolution(
+        {
+            "resolutionSource": source,
+            "endDate": close,
+            "sportsMarketType": "moneyline",
+            "gameStartTime": start,
+        }
+    )
+    return market
 
 
 def demo_twap_market(

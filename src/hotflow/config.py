@@ -108,6 +108,19 @@ class CryptoFairValueConfig(BaseModel):
     twap: TwapFairValueConfig = Field(default_factory=TwapFairValueConfig)
 
 
+class WeatherEngineConfig(BaseModel):
+    enabled: bool = True
+    min_parse_confidence: float = 0.5
+    prior_blend: float = 0.35
+
+
+class SportsEngineConfig(BaseModel):
+    enabled: bool = True
+    min_parse_confidence: float = 0.5
+    prior_blend: float = 0.35
+    live_public_client: bool = False
+
+
 class FairValueConfig(BaseModel):
     latency_haircut: float = 0.0015
     adverse_selection_haircut: float = 0.0020
@@ -216,7 +229,9 @@ class FeedsConfig(BaseModel):
     rtds: RtdsFeedConfig = Field(
         default_factory=lambda: RtdsFeedConfig(max_data_age_ms=10_000, ping_interval_s=5)
     )
-    sports_ws: FeedConfig = Field(default_factory=lambda: FeedConfig(max_data_age_ms=15_000))
+    sports_ws: FeedConfig = Field(
+        default_factory=lambda: FeedConfig(max_data_age_ms=15_000, ping_interval_s=5)
+    )
 
 
 class AIResearchConfig(BaseModel):
@@ -253,6 +268,8 @@ class HotflowConfig(BaseModel):
     experiment: ExperimentConfig = Field(default_factory=ExperimentConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
     monitoring: MonitoringConfig = Field(default_factory=MonitoringConfig)
+    weather: WeatherEngineConfig = Field(default_factory=WeatherEngineConfig)
+    sports: SportsEngineConfig = Field(default_factory=SportsEngineConfig)
 
     @property
     def is_paper(self) -> bool:

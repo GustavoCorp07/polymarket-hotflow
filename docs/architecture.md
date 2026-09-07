@@ -95,18 +95,32 @@ when safe (`STALE_DATA` / `KILL_SWITCH_STALE_WS`).
 ## Configuration
 
 All tunables live in `configs/*.yaml` (`trading`, `scanner`, `hot_market`,
-`opportunity`, `fair_value`, `risk`, `categories`, `feeds`, `ai_research`).
+`opportunity`, `fair_value`, `risk`, `categories`, `feeds`, `weather`,
+`sports`, `ai_research`).
 No scattered magic numbers in strategy code.
 
 Also: resolution parser (unknown rules ⇒ DO_NOT_TRADE), basic filter,
 microstructure (mid/microprice/imbalance), capped Kelly sizing, maker/taker EV,
 PnL velocity, regime labels, Parte 46 signal-quality JSON.
 
+## Weather / sports paper adapters
+
+- Resolution parser extensions: weather city/station/metric/unit/window/
+  timezone/rounding/threshold/source; sports league/teams plus official
+  Sports WS `live`/`ended`/`score`/`period` when present.
+- Weather FV consumes a labeled forecast distribution vs implied. Forecasts
+  are never the official resolver. No invented weather API.
+- Sports: official WS URL + server-`ping`/client-`pong`. Mock frames in
+  pytest. `NBABasketballModel` ≠ `SoccerModel`. Unsupported sports refuse.
+- Wired into discovery → HMS → fair value → risk → paper. Crypto TWAP path
+  unchanged. Toggles: `weather.enabled`, `sports.enabled` (live sports
+  client off).
+
 ## Scaffolded (interfaces tested; adapters incomplete)
 
-- Market / user / RTDS / sports WS reconnect + heartbeat  
+- Market / user / RTDS reconnect + heartbeat  
 - TWAP-aware crypto paper FV + public RTDS print cache (official 30s/60s only)  
-- Weather / sports / esports strategy adapters  
+- Esports strategy stub (no live model)  
 - Event-driven backtester protocol  
 - `trading.shadow: true` (score + audit, no orders)  
 - Prometheus metrics + JSON logs  

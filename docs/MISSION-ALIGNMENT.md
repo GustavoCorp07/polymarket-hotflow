@@ -10,7 +10,7 @@ Source of truth: [`MISSION-FULL.md`](MISSION-FULL.md).
 | 6 Scanner | Gamma + public CLOB, dynamic |
 | 7–9 HMS / opp / tiers | Implemented + resource plan |
 | 10–11 Crypto + fair value | Paper crypto FV + official 30s/60s TWAP path + public RTDS cache subscriber |
-| 12–14 Weather/sports/esports | Tested stubs |
+| 12–14 Weather/sports/esports | PAPER weather parser + forecast-feature FV; Sports WS interface + NBA/Soccer models (refuse others); esports stub |
 | 15 News engine | Not implemented (Grok cold path) |
 | 16–17 Half-life + maker/taker | Config + EV chooser |
 | 18–21 Exec / stale / latency / risk | Paper SM + clocks + VETO |

@@ -211,7 +211,11 @@ def test_cli_rtds_cache_mock(tmp_path: Path) -> None:
     )
     assert completed.exit_code == 0, completed.output
     report = json.loads(paper.read_text(encoding="utf-8"))
-    assert report["cycles"][0]["accepted"] == 1
+    assert report["cycles"][0]["accepted"] == 3
+    results = report["cycles"][0]["results"]
+    assert results[0]["twap"]["current_twap"] is not None
+    assert results[1]["weather_spec"]["complete"] is True
+    assert results[2]["sports_model"] == "basketball"
 
 
 def test_subscribe_documented_topics_only() -> None:

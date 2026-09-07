@@ -28,12 +28,13 @@ class CryptoFairValue:
         *,
         config: FairValueConfig,
         p_info: float | None = None,
+        prior_blend: float | None = None,
     ) -> float | None:
         mid = self.implied_mid(market)
         if p_info is not None:
             if mid is None:
                 return _clip_prob(p_info)
-            blend = config.crypto.prior_blend
+            blend = config.crypto.prior_blend if prior_blend is None else prior_blend
             return _clip_prob((1.0 - blend) * p_info + blend * mid)
         if mid is None:
             return None
@@ -49,6 +50,7 @@ class CryptoFairValue:
         config: FairValueConfig,
         p_info: float | None = None,
         twap: TwapSnapshot | None = None,
+        prior_blend: float | None = None,
     ) -> EdgeBreakdown:
         book = market.book
         bid = book.best_bid if book else market.best_bid
@@ -72,7 +74,7 @@ class CryptoFairValue:
                 ),
                 twap,
             )
-        p_fair = self.p_outcome(market, config=config, p_info=p_info)
+        p_fair = self.p_outcome(market, config=config, p_info=p_info, prior_blend=prior_blend)
         if p_fair is None:
             return _attach_twap(
                 EdgeBreakdown(

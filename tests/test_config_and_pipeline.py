@@ -59,10 +59,14 @@ def test_crypto_twap_window_official_only() -> None:
 
 
 def test_ws_heartbeat_intervals() -> None:
-    from hotflow.marketdata.websocket import MARKET_HEARTBEAT, RTDS_HEARTBEAT
+    from hotflow.marketdata.websocket import MARKET_HEARTBEAT, RTDS_HEARTBEAT, SPORTS_HEARTBEAT
 
     assert MARKET_HEARTBEAT.ping_interval_s == 10
     assert RTDS_HEARTBEAT.ping_interval_s == 5
+    assert SPORTS_HEARTBEAT.ping_interval_s == 5
+    assert SPORTS_HEARTBEAT.server_initiated is True
+    assert SPORTS_HEARTBEAT.ping_payload == "pong"
+    assert SPORTS_HEARTBEAT.expected_pong == "ping"
 
 
 def test_ws_reconnect_backoff() -> None:

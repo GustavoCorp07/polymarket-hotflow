@@ -31,7 +31,7 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 
 # Documented fixture path (no network required). Exercises official-shape
-# RTDS 30s/60s TWAP fair value on PAPER only.
+# RTDS 30s/60s TWAP plus weather + NBA sports fixtures on PAPER only.
 hotflow paper-run --mock
 
 # Public Gamma + CLOB scan (read-only)
@@ -58,7 +58,7 @@ Copy [`.env.example`](.env.example) to `.env` locally. Leave `HOTFLOW_ACCEPT_LIV
 1. **Universe scanner** — Gamma `GET /markets` + public CLOB book / fee-rate / `clob-markets/{condition_id}`
 2. **HMS 0–100** — COLD / WARM / HOT / ULTRA-HOT
 3. **Opportunity score** after HMS threshold
-4. **Fair value** — `P(outcome|info)`, RAW_EDGE, NET after fetched fees + spread + slippage + latency + adverse selection. Crypto TWAP markets use the official Chainlink 30s/60s observation when the window/symbol/strike can be parsed; otherwise they skip.
+4. **Fair value** — `P(outcome|info)`, RAW_EDGE, NET after fetched fees + spread + slippage + latency + adverse selection. Crypto TWAP markets use the official Chainlink 30s/60s observation when the window/symbol/strike can be parsed; otherwise they skip. Weather/sports parse resolution rules first; low confidence → `DO_NOT_TRADE`. Forecasts are features only. Sports models are per-sport (NBA ≠ Soccer); unsupported sports refuse.
 5. **Risk VETO**
 6. **Paper order state machine** with partial fills and idempotency
 
@@ -92,7 +92,13 @@ GitHub Actions runs lint, typecheck, pytest, and a mock paper-run smoke.
 
 `src/hotflow/{discovery,marketdata,hotmarket,features,fairvalue,strategies,risk,execution,portfolio,storage,analytics,ai_research,monitoring}`
 
-Category adapters (weather/sports/esports), WS reconnect/heartbeat, official RTDS 30s/60s TWAP paper path (fixtures by default; optional unauthenticated live client off), backtester protocol, shadow mode, Prometheus + JSON logs, and the offline tuner are scaffolded with tested interfaces.
+Weather and sports PAPER adapters parse resolution rules before trading.
+Forecasts never replace the official weather source. Sports uses official WS
+field names and **distinct** NBA/Soccer models (Tennis/NFL refuse). Esports
+remains a stub. Official RTDS 30s/60s TWAP paper path is unchanged (fixtures
+by default; optional unauthenticated live client off). WS reconnect/heartbeat,
+backtester protocol, shadow mode, Prometheus + JSON logs, and the offline
+tuner stay scaffolded.
 
 ## TWAP paper path
 
@@ -101,7 +107,7 @@ Category adapters (weather/sports/esports), WS reconnect/heartbeat, official RTD
 hotflow paper-run --mock
 hotflow rtds-cache --mock --out data/rtds_twap_cache.json
 hotflow paper-run --twap-cache data/rtds_twap_cache.json --mock
-pytest -q tests/test_twap.py tests/test_rtds_cache.py
+pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py
 ```
 
 Optional public RTDS collect (still PAPER — no orders):

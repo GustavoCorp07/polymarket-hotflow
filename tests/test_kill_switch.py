@@ -1,17 +1,43 @@
-from hotflow.config import HotflowConfig, RiskConfig
+from hotflow.config import HotflowConfig, HotMarketConfig, OpportunityConfig, RiskConfig
+from hotflow.hotmarket.opportunity import score_opportunity
+from hotflow.hotmarket.score import score_hot_market
 from hotflow.pipeline import PaperPipeline, demo_market
 from hotflow.reason_codes import ReasonCode
 from hotflow.risk.engine import RiskEngine
 from hotflow.risk.kill_switch import KillSwitchBoard
-from hotflow.types import KillSwitchReason, OrderStatus
+from hotflow.types import EdgeBreakdown, KillSwitchReason, OrderStatus, Side
+
+
+def _opp(notional: float = 100.0):
+    market = demo_market(hot=True)
+    hms = score_hot_market(market, HotMarketConfig())
+    edge = EdgeBreakdown(
+        p_fair=0.6,
+        market_price=0.4,
+        raw_edge=0.2,
+        fee_per_share=0.01,
+        spread_cost=0.01,
+        slippage=0.0,
+        latency_haircut=0.0,
+        adverse_selection=0.0,
+        net_expected_edge=0.18,
+        confidence=0.6,
+    )
+    return score_opportunity(
+        market=market,
+        hms=hms,
+        edge=edge,
+        side=Side.BUY,
+        token_id="demo-yes",
+        shares=notional / 0.4,
+        cfg=OpportunityConfig(),
+    )
 
 
 def test_trip_blocks_new_orders() -> None:
     kills = KillSwitchBoard()
     engine = RiskEngine(RiskConfig(), kills)
     kills.trip(KillSwitchReason.AUTH_FAIL, "test")
-    from tests.test_risk import _opp
-
     decision = engine.decide(_opp(10), category="crypto", spread=0.02, data_age_ms=1, latency_ms=1)
     assert decision.veto
     assert decision.reason == ReasonCode.KILL_SWITCH

@@ -4,13 +4,18 @@
 
 ```bash
 pip install -e ".[dev]"
-hotflow paper-run --mock    # official-shape RTDS TWAP fixture, PAPER only
+hotflow paper-run --mock    # TWAP + weather + NBA sports fixtures, PAPER only
 hotflow rtds-cache --mock   # write official-shape cache (no socket)
 hotflow paper-run --twap-cache data/rtds_twap_cache.json --mock
 hotflow scan
-pytest -q tests/test_twap.py tests/test_rtds_cache.py
+pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py
 pytest -q
 ```
+
+`weather.enabled` / `sports.enabled` default on for paper scoring. They never
+open paid weather APIs. `sports.live_public_client` stays false — pytest
+injects Sports WS frames. Unparseable rules or missing forecast/game state
+skip (`WEATHER_*` / `SPORTS_*` / `UNSUPPORTED_SPORT`).
 
 `feeds.rtds.subscriber_enabled` and `--rtds-live` stay off unless you want a
 brief unauthenticated RTDS collect. They never enable LIVE CLOB orders.

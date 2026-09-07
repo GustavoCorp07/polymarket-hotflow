@@ -6,7 +6,17 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
-from hotflow.official import CLOB_WS_PING_S, MARKET_WS, RTDS_PING_S, RTDS_WS, SPORTS_WS, USER_WS
+from hotflow.official import (
+    CLOB_WS_PING_S,
+    MARKET_WS,
+    RTDS_PING_S,
+    RTDS_WS,
+    SPORTS_CLIENT_PONG,
+    SPORTS_PING_S,
+    SPORTS_SERVER_PING,
+    SPORTS_WS,
+    USER_WS,
+)
 
 
 @dataclass(frozen=True)
@@ -15,12 +25,20 @@ class HeartbeatSpec:
     ping_interval_s: int
     ping_payload: str = "PING"
     expected_pong: str = "PONG"
+    server_initiated: bool = False
 
 
 MARKET_HEARTBEAT = HeartbeatSpec(url=MARKET_WS, ping_interval_s=CLOB_WS_PING_S)
 USER_HEARTBEAT = HeartbeatSpec(url=USER_WS, ping_interval_s=CLOB_WS_PING_S)
 RTDS_HEARTBEAT = HeartbeatSpec(url=RTDS_WS, ping_interval_s=RTDS_PING_S)
-SPORTS_HEARTBEAT = HeartbeatSpec(url=SPORTS_WS, ping_interval_s=CLOB_WS_PING_S)
+# Official sports: server ping / client pong (not CLOB client-PING).
+SPORTS_HEARTBEAT = HeartbeatSpec(
+    url=SPORTS_WS,
+    ping_interval_s=SPORTS_PING_S,
+    ping_payload=SPORTS_CLIENT_PONG,
+    expected_pong=SPORTS_SERVER_PING,
+    server_initiated=True,
+)
 
 
 class ReconnectingWebSocket:

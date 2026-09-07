@@ -32,6 +32,17 @@ SPORTS_WS = "wss://sports-api.polymarket.com/ws"
 # Official heartbeats
 CLOB_WS_PING_S = 10
 RTDS_PING_S = 5
+# Sports WS: server sends ping every 5s; client replies pong within 10s.
+# https://docs.polymarket.com/market-data/realtime-data
+SPORTS_PING_S = 5
+SPORTS_PONG_DEADLINE_S = 10
+SPORTS_SERVER_PING = "ping"
+SPORTS_CLIENT_PONG = "pong"
+
+# Leagues that appear in the official Sports WS status table (do not invent).
+SPORTS_DOCUMENTED_LEAGUES = frozenset(
+    {"NFL", "NHL", "MLB", "NBA", "CBB", "CFB", "Soccer", "Esports", "Tennis"}
+)
 
 # Official RTDS TWAP topics (not a homemade TWAP)
 # https://docs.polymarket.com/market-data/chainlink-twap

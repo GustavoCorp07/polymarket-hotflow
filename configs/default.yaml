@@ -149,6 +149,8 @@ feeds:
   sports_ws:
     max_data_age_ms: 15000
     critical: false
+    # Official Sports WS: server sends text "ping" every 5s; reply "pong" within 10s.
+    ping_interval_s: 5.0
 
 ai_research:
   base_url: https://api.moonshot.ai/v1
@@ -156,6 +158,20 @@ ai_research:
   reasoning_effort: high         # max reserved for hard tasks
   hard_task_reasoning_effort: max
   timeout_s: 120
+
+# PAPER-only weather adapter. Forecasts are features, never the official resolver.
+# There is no official Polymarket weather observation WebSocket — do not invent one.
+weather:
+  enabled: true
+  min_parse_confidence: 0.5
+  prior_blend: 0.35
+
+# PAPER-only sports adapter. Per-sport models only (NBA ≠ Soccer). Live WS default-off.
+sports:
+  enabled: true
+  min_parse_confidence: 0.5
+  prior_blend: 0.35
+  live_public_client: false
 
 storage:
   sqlite_path: data/hotflow.sqlite
