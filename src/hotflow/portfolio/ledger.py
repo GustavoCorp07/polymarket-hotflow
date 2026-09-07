@@ -182,7 +182,15 @@ class PaperLedger:
             closed_pnls=closed,
         )
 
-    def mark(self, token_id: str, price: float, *, market_id: str | None = None) -> LedgerEvent:
+    def mark(
+        self,
+        token_id: str,
+        price: float,
+        *,
+        market_id: str | None = None,
+        ts: datetime | None = None,
+        note: str = "mark",
+    ) -> LedgerEvent:
         if price < 0:
             raise ValueError("mark price must be >= 0")
         pos = self.positions.get(token_id)
@@ -204,7 +212,8 @@ class PaperLedger:
             realized_delta=0.0,
             closed=False,
             client_order_id=None,
-            note="mark",
+            note=note,
+            ts=ts,
         )
 
     def apply_fill(

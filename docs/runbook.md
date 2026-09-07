@@ -25,9 +25,10 @@ hotflow readiness
 hotflow news-fixtures
 hotflow paper-run --mock --news-fixtures
 hotflow shadow --mock --news-fixtures
-hotflow performance --report reports/paper-soak-default.json
-hotflow decay --from-reports reports
-pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py tests/test_weather_gamma_fixtures.py tests/test_esports.py tests/test_sports_cache.py tests/test_backtest.py tests/test_recorder.py tests/test_tuner.py tests/test_observability.py tests/test_paper_ledger.py tests/test_paper_gates.py tests/test_shadow_gates.py tests/test_failure_injection.py tests/test_live_gates.py tests/test_security_hygiene.py tests/test_readiness.py tests/test_news_engine.py tests/test_performance.py
+hotflow paper-soak --long --target-closes 50
+hotflow performance --report reports/paper-soak-long-*.json
+hotflow decay --report reports/paper-soak-long-*.json
+pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py tests/test_weather_gamma_fixtures.py tests/test_esports.py tests/test_sports_cache.py tests/test_backtest.py tests/test_recorder.py tests/test_tuner.py tests/test_observability.py tests/test_paper_ledger.py tests/test_paper_gates.py tests/test_shadow_gates.py tests/test_failure_injection.py tests/test_live_gates.py tests/test_security_hygiene.py tests/test_readiness.py tests/test_news_engine.py tests/test_performance.py tests/test_paper_long_soak.py
 pytest -q
 ```
 
@@ -178,11 +179,17 @@ It never places an order. `--fetch-public` stays off and does not scrape.
 ## Performance / alpha decay (PAPER)
 
 ```bash
-hotflow performance --report reports/paper-soak-default.json
-hotflow performance --from-reports reports
-hotflow decay --report reports/backtest-*.json
+hotflow paper-soak --long --target-closes 50   # labeled synthetic official-shape lots
+hotflow performance --report reports/paper-soak-long-*.json
+hotflow decay --report reports/paper-soak-long-*.json
 # or: python scripts/performance.py --report ...
 ```
+
+`--long` records ≥50 **explicit** FILL / MARK / FLATTEN closes (MAE/MFE/holding
+populate). Origin is `synthetic_official_shape` — prices are fixture arguments,
+not live venue prints. Kill-switch still stops the soak if it trips. Decay
+never auto-disables. If you only have a short soak, performance will say
+`empty_sample` / `too_small_for_inference` instead of inventing trades.
 
 Reviews **existing** paper-ledger / backtest JSON only (Gross/Net, fees,
 slippage when present, win rate, profit factor, drawdown, MAE/MFE/holding
@@ -236,6 +243,10 @@ or fill prices — missing marks are refused.
 hotflow paper-run --mock --cycles 5 --flatten --out reports/paper-soak.json
 hotflow paper-soak --cycles 5 --serve-metrics
 # or: python scripts/paper_soak.py --cycles 5
+
+# Longer labeled soak for performance/decay (n≥50 closes, MARK between open/close)
+hotflow paper-soak --long --target-closes 50
+# writes reports/paper-soak-long-*.json (session + ledger events)
 ```
 
 `--flatten` closes open paper qty at collected marks. `--kill-drill` opens and

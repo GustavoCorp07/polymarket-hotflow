@@ -633,8 +633,46 @@ def paper_soak(
         help="Explicit kill-switch recovery text",
     ),
     out: Path | None = typer.Option(None, "--out"),
+    long: bool = typer.Option(
+        False, "--long", help="Labeled synthetic official-shape lots until ≥50 closes (PAPER)"
+    ),
+    target_closes: int | None = typer.Option(
+        None, "--target-closes", help="Labeled closed trades to record (implies long soak)"
+    ),
 ) -> None:
-    """Short PAPER soak: shared ledger, flatten at last mids, optional kill drill."""
+    """PAPER soak. Default: short mock + flatten + kill drill. --long writes ≥50 labeled closes."""
+    if long or target_closes is not None:
+        from hotflow.portfolio.long_soak import DEFAULT_TARGET_CLOSES, run_labeled_long_soak
+        from hotflow.portfolio.session import PaperSession
+
+        cfg = load_config(config)
+        if cfg.trading.mode.lower() == "live":
+            raise typer.BadParameter("paper-soak --long refuses LIVE mode")
+        cfg = _prepare_mock_config(cfg)
+        cfg.trading.mode = "paper"
+        obs = _observability(cfg, serve=serve_metrics)
+        session = PaperSession(cfg, _store(cfg), obs=obs, use_twap_fixtures=True)
+        target_n = target_closes or DEFAULT_TARGET_CLOSES
+        meta = run_labeled_long_soak(session, target_closes=target_n)
+        payload = session.report()
+        payload.update(meta)
+        snap = session.ledger.snapshot()
+        payload["ledger"] = {
+            "origin": meta.get("origin"),
+            "starting_cash": snap.starting_cash,
+            "snapshot": snap.as_dict(),
+            "events": payload.get("events"),
+        }
+        payload["auto_disable"] = False
+        target = out or Path(cfg.storage.reports_dir) / (
+            f"paper-soak-long-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}.json"
+        )
+        write_report(target, payload)
+        typer.echo(
+            f"paper-soak long origin={meta.get('origin')} closed={snap.closed_count} "
+            f"target={target_n} fail_safe={meta.get('fail_safe')} live=false report={target}"
+        )
+        return
     paper_run(
         config=config,
         cycles=cycles,

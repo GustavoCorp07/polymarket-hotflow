@@ -61,6 +61,7 @@ hotflow performance --from-reports reports
 hotflow decay --from-reports reports
 hotflow paper-run --mock --cycles 3 --flatten
 hotflow paper-soak --cycles 5
+hotflow paper-soak --long --target-closes 50
 
 # Optional localhost observability (PAPER only; off by default)
 hotflow serve-metrics

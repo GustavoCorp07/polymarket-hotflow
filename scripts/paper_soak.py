@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PAPER soak wrapper: shared ledger, flatten, kill-switch drill. No LIVE."""
+"""PAPER soak wrapper: short mock soak or --long labeled closes. No LIVE."""
 
 from __future__ import annotations
 

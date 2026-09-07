@@ -22,5 +22,5 @@ Source of truth: [`MISSION-FULL.md`](MISSION-FULL.md).
 | 37–42 Security / tests / clock / resolution | Hygiene + `hotflow live-gates` freeze (accept_* closed, no signing) + clock-skew + failure-soak |
 | 43–47 Watchlist / filter / micro / audit | Implemented |
 | 48–51 Skills / watch routine | Scripts; no auto prod change |
-| 52–53 Performance / decay | PAPER: `hotflow performance` / `hotflow decay` from ledger/backtest JSON only; sample-size caveats; abs-PnL ranking refused; decay is suggestion-only (no auto-disable). Readiness gets a non-blocking INFO section |
+| 52–53 Performance / decay | PAPER: `hotflow performance` / `hotflow decay` from ledger/backtest JSON only; `hotflow paper-soak --long` labeled ≥50 closes with MARKs; sample-size caveats; abs-PnL ranking refused; decay is suggestion-only (no auto-disable). Readiness gets a non-blocking INFO section |
 | 54–64 Preservation / repo / CI / phases | Docs + soaks + LIVE-gate freeze + `hotflow readiness` rollup (`live_ready=false`); LIVE still gated |
