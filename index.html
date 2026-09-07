@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HOTFLOW paper dashboard (static Pages demo)</title>
+  <link rel="stylesheet" href="assets/dashboard.css">
+</head>
+<body>
+  <div class="banner" role="status">
+    Static GitHub Pages demo — for live local ledger use <code>hotflow dashboard</code>
+  </div>
+  <header>
+    <div>
+      <h1>HOTFLOW <span>PAPER</span> dashboard</h1>
+      <div class="sub">Paper ledger only. LIVE transmit never. No secrets. Not a live process.</div>
+    </div>
+    <div class="pills" id="status-pills"></div>
+  </header>
+  <main>
+    <section class="kpis" id="kpis"></section>
+    <section class="card">
+      <div class="label">Feed health</div>
+      <div class="feeds" id="feeds"><div class="empty">No feed gauges yet (idle or --mock without live sockets).</div></div>
+    </section>
+    <section class="card">
+      <div class="label">Last cycle hot markets</div>
+      <div id="hot"></div>
+    </section>
+    <section class="card">
+      <div class="label">Recent TRADE / SKIP</div>
+      <div class="hint">Primary reason plus Parte 46/47 reason_codes and spread_regime slices.</div>
+      <div id="recent"></div>
+    </section>
+  </main>
+  <footer>
+    Numbers are a recorded paper session ledger (FILL/MARK/FLATTEN), not venue PnL.
+    This page is static: it polls <code>state.json</code> and rotates committed
+    <code>paper-run --mock</code> snapshots. SSE <code>/events</code> is not available on GitHub Pages.
+    For a live local ledger: <code>hotflow dashboard --mock</code> on 127.0.0.1:9109.
+    <span id="meta"></span>
+  </footer>
+  <script src="demo-bundle.js"></script>
+  <script src="assets/pages.js"></script>
+</body>
+</html>

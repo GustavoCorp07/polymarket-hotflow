@@ -1,0 +1,18 @@
+{
+  "page": "hotflow-paper-dashboard",
+  "static_pages_demo": true,
+  "demo_notice": "Static GitHub Pages demo \u2014 for live local ledger use `hotflow dashboard`",
+  "demo_source": "paper-run --mock",
+  "mode": "paper",
+  "paper_only": true,
+  "live_transmit": false,
+  "poll": "state.json",
+  "primary": "demo-state.json",
+  "rotate": [
+    "snapshots/01-cycle-1.json",
+    "snapshots/02-cycle-2.json",
+    "snapshots/03-cycle-2-flatten.json"
+  ],
+  "interval_ms": 2000,
+  "frame_count": 3
+}
