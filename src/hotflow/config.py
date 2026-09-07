@@ -130,6 +130,31 @@ class EsportsEngineConfig(BaseModel):
     live_public_client: bool = False
 
 
+class BacktestSplitConfig(BaseModel):
+    train_end: str | None = None
+    validation_end: str | None = None
+    oos_start: str | None = None
+
+
+class WalkForwardConfig(BaseModel):
+    enabled: bool = True
+    train_seconds: float = 600.0
+    test_seconds: float = 300.0
+    step_seconds: float = 300.0
+
+
+class BacktestEngineConfig(BaseModel):
+    """PAPER/BACKTEST replay. Assumptions are documented; fees stay dated fixtures."""
+
+    latency_ms: float = 50.0
+    taker_delay_ms: float = 80.0
+    queue_penalty: float = 0.15
+    reject_on_gap: bool = True
+    refuse_candle_only: bool = True
+    split: BacktestSplitConfig = Field(default_factory=BacktestSplitConfig)
+    walk_forward: WalkForwardConfig = Field(default_factory=WalkForwardConfig)
+
+
 class FairValueConfig(BaseModel):
     latency_haircut: float = 0.0015
     adverse_selection_haircut: float = 0.0020
@@ -290,6 +315,7 @@ class HotflowConfig(BaseModel):
     weather: WeatherEngineConfig = Field(default_factory=WeatherEngineConfig)
     sports: SportsEngineConfig = Field(default_factory=SportsEngineConfig)
     esports: EsportsEngineConfig = Field(default_factory=EsportsEngineConfig)
+    backtest: BacktestEngineConfig = Field(default_factory=BacktestEngineConfig)
 
     @property
     def is_paper(self) -> bool:

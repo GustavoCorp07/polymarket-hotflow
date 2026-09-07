@@ -45,6 +45,10 @@ hotflow esports-fixtures
 # Public Gamma + CLOB scan (read-only)
 hotflow scan
 hotflow paper-run --cycles 1
+
+# Event-driven BACKTEST on a recorded fixture (offline, no LIVE orders)
+hotflow backtest --fixture tests/fixtures/backtest/crypto_book_trade.json
+hotflow shadow --mock
 ```
 
 Reports land in `reports/`. SQLite state lands in `data/hotflow.sqlite`.
@@ -106,8 +110,9 @@ field names and **distinct** NBA/Soccer models (Tennis/NFL refuse). Esports
 parses official Gamma match text and skips unless an official-shape state
 can be scored without inventing map/economy math. Official RTDS 30s/60s TWAP paper path is unchanged (fixtures
 by default; optional unauthenticated live client off). WS reconnect/heartbeat,
-backtester protocol, shadow mode, Prometheus + JSON logs, and the offline
-tuner stay scaffolded.
+event-driven backtester (`hotflow backtest --fixture`), shadow
+`would_buy` / `would_sell` logs, Prometheus + JSON logs, and the offline
+tuner stay in PAPER/BACKTEST/SHADOW (no LIVE).
 
 ## TWAP paper path
 

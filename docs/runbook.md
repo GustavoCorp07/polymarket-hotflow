@@ -12,7 +12,9 @@ hotflow paper-run --twap-cache data/rtds_twap_cache.json --mock
 hotflow sports-cache --mock # write official-shape Sports WS cache (no socket)
 hotflow paper-run --sports-cache data/sports_ws_cache.json --mock
 hotflow scan
-pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py tests/test_weather_gamma_fixtures.py tests/test_esports.py tests/test_sports_cache.py
+hotflow backtest --fixture tests/fixtures/backtest/crypto_book_trade.json
+hotflow shadow --mock
+pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py tests/test_weather_gamma_fixtures.py tests/test_esports.py tests/test_sports_cache.py tests/test_backtest.py
 pytest -q
 ```
 
@@ -33,10 +35,27 @@ missing/stale forecast/game state skip (`WEATHER_*` / `SPORTS_*` /
 `feeds.rtds.subscriber_enabled` and `--rtds-live` stay off unless you want a
 brief unauthenticated RTDS collect. They never enable LIVE CLOB orders.
 
+## Backtest
+
+```bash
+hotflow backtest --fixture tests/fixtures/backtest/crypto_book_trade.json
+```
+
+Replays a time-ordered recorded stream (books, trades, optional TWAP/sports/
+weather fixture states). Decisions use only events at or before `ts`.
+Candle-only streams are refused. Fees must be a **dated** official-shape
+schedule. Reports include expectancy, drawdown, fees, slippage, trade count,
+reason-code skips, train/validation/OOS, and a walk-forward window stub.
+Absolute PnL is recorded but is **not** a selection metric.
+
 ## Shadow
 
-Set `trading.mode: shadow` or `trading.shadow: true`. Decisions and
-`would_buy` audits are written; **no orders**.
+```bash
+hotflow shadow --mock
+```
+
+Or set `trading.mode: shadow` / `trading.shadow: true`. Decisions and
+`would_buy` / `would_sell` / `expected_price` audits are written; **no orders**.
 
 ## LIVE
 

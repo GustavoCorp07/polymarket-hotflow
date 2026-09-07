@@ -196,8 +196,9 @@ class PaperPipeline:
         *,
         latency_ms: float = 50.0,
         p_info: float | None = None,
+        now: datetime | None = None,
     ) -> dict[str, Any]:
-        now = datetime.now(UTC)
+        now = now or datetime.now(UTC)
         self.clock.touch("gamma", observed_at=market.fetched_at)
         if market.book:
             self.clock.touch("clob_book", observed_at=market.book.fetched_at)
@@ -558,7 +559,7 @@ class PaperPipeline:
             pnl_velocity=velocity,
             signal_half_life_ms=half_life,
         )
-        age = self.clock.age_ms("clob_book") if market.book else self.clock.age_ms("gamma")
+        age = self.clock.age_ms("clob_book", now) if market.book else self.clock.age_ms("gamma", now)
         decision = self.risk.decide(
             opp,
             category=category,
@@ -589,7 +590,19 @@ class PaperPipeline:
             reason_codes=[decision.reason],
             strategy=self.config.experiment.strategy_id,
         )
-        if self.config.is_shadow or self.config.is_backtest:
+        if self.config.is_shadow:
+            shadow = {
+                "would_buy": opp.side == Side.BUY,
+                "would_sell": opp.side == Side.SELL,
+                "expected_price": edge.market_price,
+                "actual_price_after_signal": None,
+                "simulated_fill": {
+                    "sent": False,
+                    "style": style.value,
+                    "shares": shares,
+                    "fee_per_share": edge.fee_per_share,
+                },
+            }
             self._audit(
                 market_id=market.market_id,
                 accepted=False,
@@ -597,9 +610,44 @@ class PaperPipeline:
                 hms=hms.score,
                 net_edge=edge.net_expected_edge,
                 opportunity_score=opp.score,
-                extra={"would_buy": True, "signal": quality},
+                extra={**shadow, "signal": quality},
             )
-            return {"accepted": False, "reason": ReasonCode.SHADOW_MODE, "opportunity": opp.model_dump()}
+            return {
+                "accepted": False,
+                "reason": ReasonCode.SHADOW_MODE,
+                "opportunity": opp.model_dump(),
+                "edge": edge.model_dump(),
+                "side": opp.side.value,
+                "shares": shares,
+                "style": style.value,
+                **shadow,
+            }
+
+        if self.config.is_backtest:
+            self._audit(
+                market_id=market.market_id,
+                accepted=True,
+                reason=ReasonCode.OK,
+                hms=hms.score,
+                tier=hms.tier.value,
+                net_edge=edge.net_expected_edge,
+                opportunity_score=opp.score,
+                extra={"backtest_intent": True, "signal": quality, **extras},
+            )
+            return {
+                "accepted": True,
+                "reason": ReasonCode.OK,
+                "backtest_intent": True,
+                "market_id": market.market_id,
+                "question": market.question,
+                "opportunity": opp.model_dump(),
+                "edge": edge.model_dump(),
+                "side": opp.side.value,
+                "shares": shares,
+                "style": style.value,
+                "expected_price": edge.market_price,
+                **extras,
+            }
 
         if not self.config.is_paper and not live_gates_open(self.config):
             self._audit(market_id=market.market_id, accepted=False, reason=ReasonCode.LIVE_GATES_BLOCKED)

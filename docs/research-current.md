@@ -374,6 +374,25 @@ Paper scan uses public HTTP so tests do not require the SDK.
 
 ---
 
+### Event-driven backtest (no new endpoints)
+
+Retrieved **2026-09-07**. Parte 26/27 runs **offline** on recorded official-shape
+streams (`tests/fixtures/backtest/`). It does **not** invent Gamma/CLOB/RTDS
+URLs, live fees, or TWAP values.
+
+| Item | Rule |
+| --- | --- |
+| Fees | Dated fixture copy of official CLOB fee-rate fields (`as_of` marked). Formula remains `fee = C × feeRate × p × (1-p)`. Unmarked historical params are refused. |
+| Books / trades | Replay time-ordered `book` / `trade` events. Candle-only streams → `CANDLE_ONLY_REFUSED`. |
+| TWAP / sports / weather | Injected only when the fixture includes official-shape rows. No live sockets. |
+| Look-ahead | Decisions see events at or before `ts`. Fill time is `ts + latency_ms [+ taker_delay_ms]` (documented paper assumption). |
+| Selection | Reports record `abs_pnl` but refuse ranking by max absolute PnL. |
+
+`hotflow backtest --fixture PATH` writes `reports/backtest-*.json`.
+`hotflow shadow --mock` logs `would_buy` / `would_sell` and never sends orders.
+
+---
+
 ## 3. What we deliberately do **not** invent
 
 - Extra CLOB/Gamma paths beyond those listed above  

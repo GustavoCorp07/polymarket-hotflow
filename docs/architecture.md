@@ -96,7 +96,7 @@ when safe (`STALE_DATA` / `KILL_SWITCH_STALE_WS`).
 
 All tunables live in `configs/*.yaml` (`trading`, `scanner`, `hot_market`,
 `opportunity`, `fair_value`, `risk`, `categories`, `feeds`, `weather`,
-`sports`, `ai_research`).
+`sports`, `esports`, `backtest`, `ai_research`).
 No scattered magic numbers in strategy code.
 
 Also: resolution parser (unknown rules ⇒ DO_NOT_TRADE), basic filter,
@@ -124,14 +124,15 @@ PnL velocity, regime labels, Parte 46 signal-quality JSON.
 - Wired into discovery → HMS → fair value → risk → paper. Crypto TWAP path
   unchanged. Toggles: `weather.enabled`, `sports.enabled` (live sports
   client off).
+- Backtest: `hotflow backtest --fixture` replays time-ordered book/trade/state
+  events through the same FV/risk path. No look-ahead. SHADOW logs
+  `would_buy` / `would_sell` and never transmits.
 
 ## Scaffolded (interfaces tested; adapters incomplete)
 
 - Market / user / RTDS reconnect + heartbeat  
 - TWAP-aware crypto paper FV + public RTDS print cache (official 30s/60s only)  
 - Esports skip-heavy parser + Gamma fixtures (no invented live model)  
-- Event-driven backtester protocol  
-- `trading.shadow: true` (score + audit, no orders)  
 - Prometheus metrics + JSON logs  
 - Offline auto-tuner stub  
 - Strategy experiment tracking fields

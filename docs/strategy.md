@@ -70,6 +70,18 @@ grammar. Per-title adapters refuse other games. Missing rules →
 `ESPORTS_STATE_MISSING`. Unparseable live score → `UNSUPPORTED_STRUCTURE`.
 Live Sports WS client stays off. Toggle: `esports.enabled`.
 
+## Backtest / shadow (Parte 26–28)
+
+Event-driven replay only. Book/trade events are required when HMS uses book
+features — candle-only fixtures are refused. Fill simulation applies documented
+paper latency, queue penalty, maker fill probability, and taker delay. Fees
+come from the dated fixture schedule via the official taker formula.
+Train / validation / OOS splits plus a walk-forward stub are reported.
+Do not pick a strategy by max absolute backtest PnL.
+
+SHADOW scores the same path and records `would_buy` / `would_sell` without
+sending orders.
+
 ## Signal contract (Parte 46)
 
 Every decision persists `signal_quality`: fair probability, costs, half-life,

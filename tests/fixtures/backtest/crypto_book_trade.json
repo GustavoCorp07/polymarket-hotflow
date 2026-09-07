@@ -1,0 +1,139 @@
+{
+  "schema": "hotflow.backtest.v1",
+  "mode": "backtest",
+  "note": "Recorded official-shape book/trade/mid stream for offline pytest. Fees are a dated CLOB fee-rate copy, not a live hardcoded default. No secrets.",
+  "as_of": "2026-04-01T00:00:00Z",
+  "split": {
+    "train_end": "2026-04-01T00:10:00Z",
+    "validation_end": "2026-04-01T00:20:00Z",
+    "oos_start": "2026-04-01T00:20:00Z"
+  },
+  "fees": {
+    "enabled": true,
+    "rate": 0.04,
+    "exponent": 1.0,
+    "taker_only": true,
+    "source": "clob_fee_rate_dated_as_of_2026-04-01",
+    "as_of": "2026-04-01T00:00:00Z",
+    "fetched_at": "2026-04-01T00:00:00Z",
+    "note": "Official-shape CLOB GET /fee-rate fields copied for this as_of."
+  },
+  "market": {
+    "kind": "demo_crypto",
+    "hot": true,
+    "market_id": "bt-crypto-book-trade",
+    "fees": {
+      "enabled": true,
+      "rate": 0.04,
+      "exponent": 1.0,
+      "taker_only": true,
+      "source": "clob_fee_rate_dated_as_of_2026-04-01",
+      "as_of": "2026-04-01T00:00:00Z",
+      "fetched_at": "2026-04-01T00:00:00Z"
+    }
+  },
+  "events": [
+    {
+      "ts": "2026-04-01T00:00:00Z",
+      "kind": "book",
+      "payload": {
+        "bids": [[0.40, 90.0], [0.38, 100.0]],
+        "asks": [[0.42, 80.0], [0.44, 120.0]]
+      }
+    },
+    {
+      "ts": "2026-04-01T00:00:05Z",
+      "kind": "decision",
+      "payload": {"p_info": 0.70}
+    },
+    {
+      "ts": "2026-04-01T00:00:05.100Z",
+      "kind": "book",
+      "payload": {
+        "bids": [[0.39, 90.0], [0.37, 100.0]],
+        "asks": [[0.41, 80.0], [0.43, 120.0]]
+      }
+    },
+    {
+      "ts": "2026-04-01T00:00:06Z",
+      "kind": "mid",
+      "payload": {"mid": 0.40}
+    },
+    {
+      "ts": "2026-04-01T00:00:08Z",
+      "kind": "book",
+      "payload": {
+        "bids": [[0.10, 5.0], [0.09, 5.0]],
+        "asks": [[0.11, 5.0], [0.12, 5.0]]
+      }
+    },
+    {
+      "ts": "2026-04-01T00:00:12Z",
+      "kind": "trade",
+      "payload": {"price": 0.41, "size": 10.0}
+    },
+    {
+      "ts": "2026-04-01T00:00:13Z",
+      "kind": "book",
+      "payload": {
+        "bids": [[0.40, 90.0], [0.38, 100.0]],
+        "asks": [[0.42, 80.0], [0.44, 120.0]]
+      }
+    },
+    {
+      "ts": "2026-04-01T00:08:00Z",
+      "kind": "weather_forecast",
+      "payload": {"key": "default", "mean": 78.0, "p_yes": 0.9}
+    },
+    {
+      "ts": "2026-04-01T00:08:00Z",
+      "kind": "sports_state",
+      "payload": {
+        "leagueAbbreviation": "NBA",
+        "homeTeam": "Los Angeles Lakers",
+        "awayTeam": "Boston Celtics",
+        "status": "InProgress",
+        "live": true,
+        "ended": false,
+        "score": "54-51",
+        "period": "Q3"
+      }
+    },
+    {
+      "ts": "2026-04-01T00:09:00Z",
+      "kind": "twap",
+      "payload": {"symbol": "btc/usd", "window_seconds": 60, "value": 65010.0}
+    },
+    {
+      "ts": "2026-04-01T00:12:00Z",
+      "kind": "book",
+      "payload": {
+        "bids": [[0.40, 90.0], [0.38, 100.0]],
+        "asks": [[0.42, 80.0], [0.44, 120.0]]
+      }
+    },
+    {
+      "ts": "2026-04-01T00:12:00Z",
+      "kind": "decision",
+      "payload": {"p_info": 0.70}
+    },
+    {
+      "ts": "2026-04-01T00:22:00Z",
+      "kind": "book",
+      "payload": {
+        "bids": [[0.40, 90.0], [0.38, 100.0]],
+        "asks": [[0.42, 80.0], [0.44, 120.0]]
+      }
+    },
+    {
+      "ts": "2026-04-01T00:22:00Z",
+      "kind": "decision",
+      "payload": {"p_info": 0.70}
+    },
+    {
+      "ts": "2026-04-01T00:24:00Z",
+      "kind": "resolve",
+      "payload": {"outcome": "yes", "price": 1.0}
+    }
+  ]
+}

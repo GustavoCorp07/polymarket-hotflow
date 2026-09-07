@@ -298,6 +298,62 @@ def esports_fixtures_cmd(
 
 
 @app.command()
+def backtest(
+    fixture: Path = typer.Option(..., "--fixture", "-f", help="Recorded event-stream JSON"),
+    config: Path | None = typer.Option(None, "--config", "-c"),
+    out: Path | None = typer.Option(None, "--out"),
+) -> None:
+    """Replay a time-ordered fixture on BACKTEST. Never sends LIVE orders."""
+    from hotflow.backtest import EventDrivenBacktester
+
+    cfg = load_config(config)
+    if cfg.trading.mode.lower() == "live":
+        raise typer.BadParameter("backtest refuses LIVE mode")
+    cfg.trading.mode = "backtest"
+    report = EventDrivenBacktester(cfg).run_fixture(fixture)
+    target = out or Path(cfg.storage.reports_dir) / (
+        f"backtest-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}.json"
+    )
+    write_report(target, report)
+    metrics = report.get("metrics") or {}
+    typer.echo(
+        f"backtest trades={metrics.get('trade_count')} expectancy={metrics.get('expectancy')} "
+        f"dd={metrics.get('max_drawdown')} report={target}"
+    )
+
+
+@app.command()
+def shadow(
+    config: Path | None = typer.Option(None, "--config", "-c"),
+    mock: bool = typer.Option(True, "--mock", help="Documented fixtures only"),
+    out: Path | None = typer.Option(None, "--out"),
+) -> None:
+    """Score would_buy / would_sell on real-shaped data. Never sends orders."""
+    from hotflow.backtest.shadow import run_shadow
+
+    cfg = load_config(config)
+    if cfg.trading.mode.lower() == "live":
+        raise typer.BadParameter("shadow refuses LIVE mode")
+    cfg.trading.mode = "shadow"
+    cfg.trading.shadow = True
+    if mock:
+        markets = [
+            demo_twap_market(hot=True),
+            demo_weather_market(hot=True),
+            demo_sports_nba_market(hot=True),
+        ]
+        rows = run_shadow(cfg, markets)
+    else:
+        raise typer.BadParameter("shadow --mock is the supported path in this pass")
+    payload = {"mode": "shadow", "sent_orders": False, "results": rows}
+    target = out or Path(cfg.storage.reports_dir) / (
+        f"shadow-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}.json"
+    )
+    write_report(target, payload)
+    typer.echo(f"shadow decisions={len(rows)} sent_orders=0 report={target}")
+
+
+@app.command()
 def version() -> None:
     from hotflow import __version__
 

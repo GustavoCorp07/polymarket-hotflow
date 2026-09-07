@@ -15,8 +15,8 @@ Source of truth: [`MISSION-FULL.md`](MISSION-FULL.md).
 | 16–17 Half-life + maker/taker | Config + EV chooser |
 | 18–21 Exec / stale / latency / risk | Paper SM + clocks + VETO |
 | 22–25 Sizing / velocity / portfolio / regime | Capped Kelly + scores + labels |
-| 26–27 Backtest / anti-overfit | Interfaces + smoke only |
-| 28 Modes | backtest / paper / shadow / live |
+| 26–27 Backtest / anti-overfit | Event-driven replay (`hotflow backtest --fixture`); train/val/OOS + walk-forward stub; refuses max-abs-PnL selection |
+| 28 Modes | backtest / paper / shadow (`hotflow shadow --mock`) / live |
 | 29–30 Tuner / experiments | Offline stubs + git/version fields |
 | 31–36 Storage / obs / alerts | SQLite/Parquet + Prometheus/JSON |
 | 37–42 Security / tests / clock / resolution | Hygiene tests + parser |

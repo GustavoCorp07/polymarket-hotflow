@@ -187,6 +187,20 @@ esports:
   prior_blend: 0.35
   live_public_client: false
 
+# PAPER/BACKTEST replay. queue_penalty and delays are documented paper assumptions.
+# Fees come from dated fixture schedules — never hardcoded live rates.
+backtest:
+  latency_ms: 50
+  taker_delay_ms: 80
+  queue_penalty: 0.15
+  reject_on_gap: true
+  refuse_candle_only: true
+  walk_forward:
+    enabled: true
+    train_seconds: 600
+    test_seconds: 300
+    step_seconds: 300
+
 storage:
   sqlite_path: data/hotflow.sqlite
   parquet_dir: data/parquet
