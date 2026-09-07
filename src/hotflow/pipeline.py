@@ -28,6 +28,7 @@ from hotflow.fairvalue.maker_taker import choose_style
 from hotflow.fairvalue.sports import sports_model_for
 from hotflow.fairvalue.twap import compute_twap_snapshot, time_remaining_seconds, twap_p_info_for_market
 from hotflow.fairvalue.weather import weather_p_yes
+from hotflow.features.microstructure import microstructure_features
 from hotflow.features.snapshot import build_feature_snapshot
 from hotflow.features.time_features import time_to_resolution_seconds
 from hotflow.hotmarket.opportunity import score_opportunity
@@ -204,6 +205,7 @@ class PaperPipeline:
             from hotflow.news.fixtures import labeled_news_items
 
             self.news.ingest_many(labeled_news_items())
+        self._spread_history: dict[str, list[float]] = {}
 
     def _detect_regime(
         self,
@@ -246,6 +248,32 @@ class PaperPipeline:
         self.kills.trip(KillSwitchReason.STALE_CRITICAL_DATA, ",".join(feeds))
         self.broker.cancel_open()
 
+    def _attach_microstructure(
+        self,
+        market: MarketRecord,
+        extras: dict[str, Any],
+        *,
+        now: datetime | None = None,
+        events: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        """Parte 45 snapshot on extras. History is observed after the label is computed."""
+        recent = list(self._spread_history.get(market.market_id, []))
+        feats = microstructure_features(
+            market,
+            self.config.microstructure,
+            recent_spreads=recent or None,
+            events=events,
+            now=now,
+        )
+        extras["microstructure"] = feats
+        spread = feats.get("spread")
+        if isinstance(spread, (int, float)):
+            hist = self._spread_history.setdefault(market.market_id, [])
+            hist.append(float(spread))
+            if len(hist) > 32:
+                del hist[:-32]
+        return feats
+
     def evaluate_market(
         self,
         market: MarketRecord,
@@ -253,9 +281,12 @@ class PaperPipeline:
         latency_ms: float = 50.0,
         p_info: float | None = None,
         now: datetime | None = None,
+        micro_events: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         started = monotonic_ms()
-        result = self._evaluate_market(market, latency_ms=latency_ms, p_info=p_info, now=now)
+        result = self._evaluate_market(
+            market, latency_ms=latency_ms, p_info=p_info, now=now, micro_events=micro_events
+        )
         if result.get("dry_run"):
             return result
         category = infer_category(market.tags, market.category)
@@ -294,6 +325,7 @@ class PaperPipeline:
         dry_run: bool = False,
         allocation: AllocationDecision | None = None,
         enforce_cooldown: bool = True,
+        micro_events: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         now = now or datetime.now(UTC)
         if latency_ms < 0:
@@ -345,6 +377,7 @@ class PaperPipeline:
             return {"accepted": False, "reason": ReasonCode.UNKNOWN_RESOLUTION}
 
         extras: dict[str, Any] = {}
+        self._attach_microstructure(market, extras, now=now, events=micro_events)
         if category == "esports":
             if not self.config.esports.enabled:
                 self._audit(market_id=market.market_id, accepted=False, reason=ReasonCode.CATEGORY_DISABLED)
@@ -610,7 +643,7 @@ class PaperPipeline:
         regime_report = self._detect_regime(market, category, extras, now=now, ttr_seconds=twap_ttr)
 
         hms = score_hot_market(market, self.config.hot_market)
-        snap = build_feature_snapshot(market, hms)
+        snap = build_feature_snapshot(market, hms, microstructure=extras.get("microstructure"))
         snap.extras["resource_plan"] = resource_plan(hms.tier)
         snap.extras.update(extras)
         if twap_snap is not None:
@@ -850,15 +883,24 @@ class PaperPipeline:
                 "question": market.question,
             }
 
+        micro = extras.get("microstructure") if isinstance(extras.get("microstructure"), dict) else {}
+        spread = market.spread if market.spread is not None else (market.book.spread if market.book else None)
+        mcfg = self.config.microstructure
+        buy_impact = micro.get("impact_buy") if isinstance(micro.get("impact_buy"), (int, float)) else None
         decision = self.risk.decide(
             opp,
             category=category,
-            spread=market.spread,
+            spread=spread,
             data_age_ms=age,
             latency_ms=latency_ms,
             now=now,
             requested_notional=min(opp.intended_notional, self.config.risk.max_order_notional),
             enforce_cooldown=enforce_cooldown,
+            bid_depth=micro.get("bid_depth") if isinstance(micro.get("bid_depth"), (int, float)) else None,
+            ask_depth=micro.get("ask_depth") if isinstance(micro.get("ask_depth"), (int, float)) else None,
+            book_impact=buy_impact,
+            min_top_depth=mcfg.min_top_depth,
+            max_book_impact=mcfg.max_impact,
         )
         if self.store:
             self.store.save_risk(market.market_id, decision)
@@ -889,6 +931,7 @@ class PaperPipeline:
             decision="TRADE" if decision.allowed else "SKIP",
             reason_codes=[decision.reason, alloc.reason],
             strategy=self.config.experiment.strategy_id,
+            extras=extras,
         )
         if self.config.is_shadow:
             shadow = {

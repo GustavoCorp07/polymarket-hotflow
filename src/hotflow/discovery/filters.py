@@ -22,6 +22,9 @@ def basic_filter_reason(market: MarketRecord, cfg: ScannerConfig) -> str | None:
         return ReasonCode.LOW_LIQUIDITY
     if market.volume_24hr is not None and market.volume_24hr < cfg.min_volume_24h:
         return ReasonCode.LOW_LIQUIDITY
-    if market.spread is not None and market.spread > cfg.max_spread:
+    spread = market.spread
+    if spread is None and market.book is not None:
+        spread = market.book.spread
+    if spread is not None and spread > cfg.max_spread:
         return ReasonCode.SPREAD_TOO_LARGE
     return None
