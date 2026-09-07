@@ -17,7 +17,7 @@ hotflow backtest --fixture tests/fixtures/backtest/crypto_longer_synthetic.json
 hotflow record-stream --mock
 hotflow tune --report reports/backtest-*.json --write-suggestion reports/tune-suggestion.yaml
 hotflow shadow --mock
-pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py tests/test_weather_gamma_fixtures.py tests/test_esports.py tests/test_sports_cache.py tests/test_backtest.py tests/test_recorder.py tests/test_tuner.py tests/test_observability.py
+pytest -q tests/test_twap.py tests/test_rtds_cache.py tests/test_weather_sports.py tests/test_weather_gamma_fixtures.py tests/test_esports.py tests/test_sports_cache.py tests/test_backtest.py tests/test_recorder.py tests/test_tuner.py tests/test_observability.py tests/test_paper_ledger.py tests/test_paper_gates.py
 pytest -q
 ```
 
@@ -104,6 +104,29 @@ python scripts/hotflow_experiment.py
 python scripts/hotflow_incident.py
 ```
 
+## Paper soak and accounting (Phase 12 / Parte 59)
+
+Paper equity is the **session ledger**, not a venue balance. Cash, positions,
+realized/unrealized PnL, fees, peak equity, and drawdown replay from explicit
+`FILL` / `MARK` / `FLATTEN` events. Flatten prices must be last observed mids
+or fill prices — missing marks are refused.
+
+```bash
+# Shared ledger across cycles; optional flatten + kill-switch drill
+hotflow paper-run --mock --cycles 5 --flatten --out reports/paper-soak.json
+hotflow paper-soak --cycles 5 --serve-metrics
+# or: python scripts/paper_soak.py --cycles 5
+```
+
+`--flatten` closes open paper qty at collected marks. `--kill-drill` opens and
+closes a labeled paper lot that breaches `risk.max_daily_loss`, verifies the
+next order is `KILL_SWITCH`, and clears only with `--acknowledge "..."` (blank
+ack is rejected). SQLite tables `ledger_events` / `ledger_snapshots` persist
+the same numbers the Prometheus gauges read.
+
+Session reports include `accounting` and the event list so a soak can be
+replayed with `replay_events(...)`.
+
 ## Metrics and alerts (Parte 35–36)
 
 Optional localhost scrape. Default bind is `127.0.0.1` (not a Polymarket
@@ -120,8 +143,9 @@ curl -sS http://127.0.0.1:9108/metrics | head
 
 Prometheus can scrape `http://127.0.0.1:9108/metrics`. Histogram series
 `hotflow_signal_latency_seconds` and `hotflow_order_latency_seconds` support
-`histogram_quantile(0.5|0.9|0.99, …)` for p50/p90/p99. Equity / PnL gauges
-are **placeholders** from paper cash and risk-state PnL — not venue balances.
+`histogram_quantile(0.5|0.9|0.99, …)` for p50/p90/p99. Equity / PnL /
+drawdown / win-rate gauges are published from the **paper session ledger**
+(replayable `FILL` / `MARK` / `FLATTEN` events). They are not venue balances.
 
 Alert hooks emit a redacted JSON `alert` event and an optional callback
 (`Observability.add_alert_callback`). Kinds: kill switch, drawdown, stale WS,

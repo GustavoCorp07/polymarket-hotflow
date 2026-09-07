@@ -36,6 +36,7 @@ _KILL_TO_KIND: dict[KillSwitchReason, AlertKind] = {
     KillSwitchReason.STALE_CRITICAL_DATA: AlertKind.STALE_WS,
     KillSwitchReason.DATA_FEED_DEAD: AlertKind.API_DISCONNECTED,
     KillSwitchReason.DRAWDOWN_EXCEEDED: AlertKind.DRAWDOWN,
+    KillSwitchReason.DAILY_LOSS_EXCEEDED: AlertKind.DRAWDOWN,
     KillSwitchReason.EXCESSIVE_LATENCY: AlertKind.HIGH_LATENCY,
     KillSwitchReason.ABNORMAL_SLIPPAGE: AlertKind.HIGH_SLIPPAGE,
 }

@@ -26,8 +26,8 @@ Useful series:
 
 | Series | Notes |
 | --- | --- |
-| `hotflow_equity` / `hotflow_*_pnl` / `hotflow_drawdown` | Paper placeholders |
-| `hotflow_trades_total` / `hotflow_win_rate` / `hotflow_expectancy` | Win-rate hooks from closed paper/backtest PnL |
+| `hotflow_equity` / `hotflow_*_pnl` / `hotflow_drawdown` | Paper session ledger (not venue balances) |
+| `hotflow_trades_total` / `hotflow_win_rate` / `hotflow_expectancy` | Closed-trade stats from paper ledger / backtest PnL |
 | `hotflow_fees_total` / `hotflow_slippage_total` | From fetched or dated fixture schedules — never hardcoded venue rates |
 | `hotflow_fill_ratio` | Simulator / backtest fill fraction |
 | `hotflow_hot_markets` / `hotflow_opportunity_score` / `hotflow_hms` | Latest cycle |

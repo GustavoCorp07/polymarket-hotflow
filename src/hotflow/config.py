@@ -30,6 +30,7 @@ class TradingConfig(BaseModel):
     session_id: str = "local-paper"
     paper_starting_cash: float = 10_000.0
     paper_fill_ratio: float = 0.55
+    paper_flatten_at_session_end: bool = False
     min_required_edge: float = 0.012
     min_confidence: float = 0.35
     signal_half_life_ms: float = 2_000.0

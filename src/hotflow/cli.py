@@ -142,8 +142,15 @@ def paper_run(
     ),
     out: Path | None = typer.Option(None, "--out"),
     serve_metrics: bool = typer.Option(False, "--serve-metrics", help="Bind localhost /metrics /health /ready"),
+    flatten: bool = typer.Option(
+        False, "--flatten", help="Close paper positions at last observed mids (explicit marks only)"
+    ),
+    kill_drill: bool = typer.Option(False, "--kill-drill", help="Paper kill-switch trip + recovery drill"),
+    acknowledge: str = typer.Option("", "--acknowledge", help="Required text to clear a tripped kill switch"),
 ) -> None:
     """One or more paper cycles. Default mode is paper. LIVE is not started here."""
+    from hotflow.portfolio.session import PaperSession, mock_markets, run_kill_recovery_drill
+
     cfg = load_config(config)
     if cfg.trading.mode.lower() == "live" and not live_gates_open(cfg):
         raise typer.BadParameter("LIVE gates closed; staying out of transmit. Use paper.")
@@ -151,50 +158,49 @@ def paper_run(
         cfg = _prepare_mock_config(cfg)
     store = _store(cfg)
     obs = _observability(cfg, serve=serve_metrics)
-    summaries: list[dict[str, Any]] = []
+    session = PaperSession(
+        cfg,
+        store,
+        obs=obs,
+        use_twap_fixtures=mock,
+        cache_path=str(twap_cache) if twap_cache else None,
+        sports_cache_path=str(sports_cache) if sports_cache else None,
+    )
     for _cycle in range(max(1, cycles)):
-        pipe = PaperPipeline(
-            cfg,
-            store,
-            use_twap_fixtures=mock,
-            cache_path=twap_cache,
-            sports_cache_path=sports_cache,
-            obs=obs,
-        )
         if mock:
-            results = [
-                pipe.evaluate_market(demo_twap_market(hot=True)),
-                pipe.evaluate_market(demo_weather_market(hot=True)),
-                pipe.evaluate_market(demo_sports_nba_market(hot=True)),
-                *[pipe.evaluate_market(item) for item in gamma_weather_demo_markets(hot=True)],
-                *[pipe.evaluate_market(item) for item in gamma_esports_demo_markets(hot=True)],
-            ]
-            obs.snapshot_pipeline(pipe)
-            summaries.append(
-                {
-                    "ok": True,
-                    "mode": cfg.trading.mode,
-                    "markets": len(results),
-                    "accepted": sum(1 for item in results if item.get("accepted")),
-                    "results": results,
-                    "audits": [a.model_dump(mode="json") for a in pipe.audits],
-                }
-            )
+            session.run_markets(mock_markets())
         else:
-            summaries.append(
-                asyncio.run(
-                    pipe.run_scan(
-                        use_network=True,
-                        attach_subscriber=_attach_rtds(cfg, mock, rtds_live),
-                        attach_sports_subscriber=_attach_sports(cfg, mock, sports_live),
-                    )
+            scanned = asyncio.run(
+                session.pipe.run_scan(
+                    use_network=True,
+                    attach_subscriber=_attach_rtds(cfg, mock, rtds_live),
+                    attach_sports_subscriber=_attach_sports(cfg, mock, sports_live),
                 )
             )
-    payload = {"cycles": summaries, "mode": cfg.trading.mode, "shadow": cfg.trading.shadow}
+            for result in scanned.get("results") or []:
+                order = result.get("order") if isinstance(result.get("order"), dict) else None
+                if order and order.get("token_id") and order.get("price") is not None:
+                    session.marks[str(order["token_id"])] = float(order["price"])
+            session.cycle_summaries.append(scanned)
+    flatten_rows: list[dict[str, Any]] = []
+    if flatten or cfg.trading.paper_flatten_at_session_end:
+        flatten_rows = session.flatten()
+    drill = None
+    if kill_drill:
+        drill = run_kill_recovery_drill(session, acknowledge=acknowledge or None)
+    payload = session.report()
+    payload["flatten"] = flatten_rows
+    if drill is not None:
+        payload["kill_drill"] = drill
     target = out or Path(cfg.storage.reports_dir) / f"paper-run-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}.json"
     write_report(target, payload)
-    accepted = sum(c.get("accepted", 0) for c in summaries)
-    typer.echo(f"paper-run mode={cfg.trading.mode} accepted={accepted} report={target}")
+    accepted = sum(c.get("accepted", 0) for c in session.cycle_summaries)
+    snap = session.ledger.snapshot()
+    typer.echo(
+        f"paper-run mode={cfg.trading.mode} accepted={accepted} "
+        f"equity={snap.equity:.4f} realized={snap.realized_pnl:.4f} "
+        f"win_rate={snap.win_rate:.3f} report={target}"
+    )
 
 
 @app.command("rtds-cache")
@@ -460,6 +466,36 @@ def tune(
     typer.echo(
         f"tune refused={payload.refused} suggested={len(payload.suggested)} "
         f"applied=false report={target}"
+    )
+
+
+@app.command("paper-soak")
+def paper_soak(
+    config: Path | None = typer.Option(None, "--config", "-c"),
+    cycles: int = typer.Option(5, "--cycles"),
+    serve_metrics: bool = typer.Option(False, "--serve-metrics"),
+    kill_drill: bool = typer.Option(True, "--kill-drill/--no-kill-drill"),
+    acknowledge: str = typer.Option(
+        "operator confirmed recover",
+        "--acknowledge",
+        help="Explicit kill-switch recovery text",
+    ),
+    out: Path | None = typer.Option(None, "--out"),
+) -> None:
+    """Short PAPER soak: shared ledger, flatten at last mids, optional kill drill."""
+    paper_run(
+        config=config,
+        cycles=cycles,
+        mock=True,
+        twap_cache=None,
+        sports_cache=None,
+        rtds_live=False,
+        sports_live=False,
+        out=out,
+        serve_metrics=serve_metrics,
+        flatten=True,
+        kill_drill=kill_drill,
+        acknowledge=acknowledge,
     )
 
 

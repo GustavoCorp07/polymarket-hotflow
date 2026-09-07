@@ -47,6 +47,7 @@ from hotflow.marketdata.weather_fixtures import (
     labeled_gamma_weather_forecasts,
 )
 from hotflow.monitoring.observer import Observability
+from hotflow.portfolio.ledger import PaperLedger
 from hotflow.portfolio.sizing import size_notional
 from hotflow.reason_codes import ReasonCode
 from hotflow.risk.engine import RiskEngine
@@ -150,12 +151,18 @@ class PaperPipeline:
         sports_cache_path: str | Path | None = None,
         esports_source: FixtureEsportsSource | None = None,
         obs: Observability | None = None,
+        ledger: PaperLedger | None = None,
     ) -> None:
         self.config = config
         self.obs = obs or Observability.from_config(config, announce_restart=False)
-        self.kills = KillSwitchBoard(on_trip=self.obs.on_kill_event)
+        self.kills = KillSwitchBoard(on_trip=self.obs.on_kill_event, on_reset=self.obs.note_kill_clear)
         self.risk = RiskEngine(config.risk, self.kills)
-        self.broker = PaperBroker(config.trading)
+        self.ledger = ledger or PaperLedger(
+            starting_cash=config.trading.paper_starting_cash,
+            session_id=config.trading.session_id,
+        )
+        self.broker = PaperBroker(config.trading, ledger=self.ledger)
+        self.risk.sync_from_ledger(self.ledger.snapshot())
         self.fair = CryptoFairValue()
         self.clock = FeedClock(config.feeds)
         self.store = store
@@ -686,24 +693,38 @@ class PaperPipeline:
         order = self.broker.create(opp, price=edge.market_price, size=shares)
         order = self.broker.submit(order.client_order_id)
         filled_before = order.filled_size
-        order = self.broker.simulate_fill(order.client_order_id)
+        order = self.broker.simulate_fill(
+            order.client_order_id,
+            fee_per_share=float(edge.fee_per_share or 0.0),
+        )
         self.obs.observe_order_latency(monotonic_ms() - order_started)
+        fill_event = self.broker.last_fill_event
         self.risk.state.open_orders = sum(
             1
             for o in self.broker.orders.values()
             if o.status.value in {"SUBMITTED", "ACKNOWLEDGED", "PARTIAL"}
         )
         self.risk.state.last_order_at = now
+        realized_delta = fill_event.realized_delta if fill_event is not None else 0.0
         self.risk.note_fill(
             market_id=market.market_id,
             category=category,
             notional=order.filled_size * (order.avg_fill_price or order.price),
+            pnl_delta=realized_delta,
         )
+        self.risk.sync_from_ledger(self.ledger.snapshot())
+        self.risk.enforce_session_limits()
+        if fill_event is not None and fill_event.closed:
+            self.obs.metrics.note_closed_trade(fill_event.realized_delta)
+        self.obs.publish_ledger(self.ledger.snapshot())
         if self.store:
             self.store.save_order(order)
             delta = order.filled_size - filled_before
             if delta > 0:
                 self.store.save_trade(order, delta, order.avg_fill_price or order.price)
+            if fill_event is not None:
+                self.store.save_ledger_event(fill_event)
+            self.store.save_ledger_snapshot(self.ledger.snapshot())
         self._audit(
             market_id=market.market_id,
             accepted=True,

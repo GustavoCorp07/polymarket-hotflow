@@ -4,6 +4,7 @@ trading:
   session_id: local-paper
   paper_starting_cash: 10000.0
   paper_fill_ratio: 0.55   # simulator partial-fill fraction per ack
+  paper_flatten_at_session_end: false  # explicit CLOSE at last observed mids only
   min_required_edge: 0.012
   min_confidence: 0.35
   signal_half_life_ms: 2000

@@ -18,10 +18,15 @@ class KillEvent:
 
 
 class KillSwitchBoard:
-    def __init__(self, on_trip: Callable[[KillEvent], None] | None = None) -> None:
+    def __init__(
+        self,
+        on_trip: Callable[[KillEvent], None] | None = None,
+        on_reset: Callable[[], None] | None = None,
+    ) -> None:
         self._active: KillEvent | None = None
         self.history: list[KillEvent] = []
         self._on_trip = on_trip
+        self._on_reset = on_reset
 
     @property
     def tripped(self) -> bool:
@@ -45,3 +50,5 @@ class KillSwitchBoard:
         if self._active:
             self._active.recovered = True
         self._active = None
+        if self._on_reset is not None:
+            self._on_reset()

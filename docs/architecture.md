@@ -24,7 +24,7 @@ unreachable unless every acceptance gate passes.
      │                └──────────────┴───────────────┴───────┐       │
      │                                                       ▼       ▼
      │                                              SQLite/Parquet +
-     │                                              JSON logs / Prometheus
+     │                                              paper ledger + JSON / Prometheus
      └──────────── marketdata freshness / WS heartbeats ─────────────┘
 ```
 

@@ -49,16 +49,20 @@ class MetricsRegistry:
         self._fill_attempts = 0
         self._fills = 0
 
-        self.equity = Gauge("hotflow_equity", "Paper equity placeholder", registry=self.registry)
+        self.equity = Gauge("hotflow_equity", "Paper session ledger equity", registry=self.registry)
         self.realized_pnl = Gauge(
-            "hotflow_realized_pnl", "Realized PnL placeholder", registry=self.registry
+            "hotflow_realized_pnl", "Paper ledger realized PnL from closed fills", registry=self.registry
         )
         self.unrealized_pnl = Gauge(
-            "hotflow_unrealized_pnl", "Unrealized PnL placeholder", registry=self.registry
+            "hotflow_unrealized_pnl", "Paper ledger unrealized PnL at last marks", registry=self.registry
         )
-        self.daily_pnl = Gauge("hotflow_daily_pnl", "Daily PnL placeholder", registry=self.registry)
+        self.daily_pnl = Gauge(
+            "hotflow_daily_pnl", "Paper ledger realized PnL (session/day)", registry=self.registry
+        )
         self.drawdown = Gauge("hotflow_drawdown", "Drawdown fraction from peak", registry=self.registry)
-        self.win_rate = Gauge("hotflow_win_rate", "Closed-trade win rate hook", registry=self.registry)
+        self.win_rate = Gauge(
+            "hotflow_win_rate", "Closed-trade win rate from paper ledger", registry=self.registry
+        )
         self.expectancy = Gauge("hotflow_expectancy", "Mean closed-trade PnL", registry=self.registry)
         self.fill_ratio = Gauge("hotflow_fill_ratio", "Filled size / intended size", registry=self.registry)
         self.hot_markets = Gauge(

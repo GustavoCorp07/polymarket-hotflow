@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import Any
 
 from hotflow.config import RiskConfig
 from hotflow.reason_codes import ReasonCode
@@ -51,6 +52,38 @@ class RiskEngine:
         self.state.concurrent_markets.add(market_id)
         self.state.last_order_notional = notional
         self.state.last_was_loss = pnl_delta < 0
+
+    def sync_from_ledger(self, snap: Any) -> None:
+        """Copy paper-ledger equity / PnL / exposure. Does not invent venue balances."""
+        self.state.equity = float(snap.equity)
+        self.state.peak_equity = float(snap.peak_equity)
+        self.state.session_pnl = float(snap.session_pnl)
+        self.state.daily_pnl = float(snap.realized_pnl)
+        exposure: dict[str, float] = {}
+        total = 0.0
+        for token, row in (snap.positions or {}).items():
+            notional = abs(float(row.get("qty") or 0.0) * float(row.get("mark") or row.get("avg_cost") or 0.0))
+            exposure[str(token)] = notional
+            total += notional
+        if exposure:
+            self.state.market_exposure = exposure
+            self.state.total_exposure = total
+
+    def enforce_session_limits(self) -> RiskDecision | None:
+        """Trip kill switch after fills if daily loss or drawdown is breached."""
+        cfg = self.config
+        if self.state.daily_pnl <= -abs(cfg.max_daily_loss):
+            self.kills.trip(KillSwitchReason.DAILY_LOSS_EXCEEDED, "max_daily_loss")
+            return RiskDecision(allowed=False, veto=True, reason=ReasonCode.RISK_LIMIT, detail="max_daily_loss")
+        if self.state.session_pnl <= -abs(cfg.max_session_loss):
+            self.kills.trip(KillSwitchReason.DAILY_LOSS_EXCEEDED, "max_session_loss")
+            return RiskDecision(allowed=False, veto=True, reason=ReasonCode.RISK_LIMIT, detail="max_session_loss")
+        if self.state.peak_equity > 0:
+            dd = (self.state.peak_equity - self.state.equity) / self.state.peak_equity
+            if dd >= cfg.max_drawdown:
+                self.kills.trip(KillSwitchReason.DRAWDOWN_EXCEEDED, "max_drawdown")
+                return RiskDecision(allowed=False, veto=True, reason=ReasonCode.RISK_LIMIT, detail="max_drawdown")
+        return None
 
     def decide(
         self,

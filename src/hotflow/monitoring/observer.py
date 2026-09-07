@@ -160,6 +160,19 @@ class Observability:
         if expectancy is not None:
             self.metrics.expectancy.set(expectancy)
 
+    def publish_ledger(self, snap: Any) -> None:
+        self.set_equity_pnl(
+            equity=float(snap.equity),
+            realized=float(snap.realized_pnl),
+            unrealized=float(snap.unrealized_pnl),
+            daily=float(snap.realized_pnl),
+            drawdown=float(snap.drawdown),
+            expectancy=float(snap.expectancy),
+        )
+        self.metrics.win_rate.set(float(snap.win_rate))
+        if self.mon.json_logs:
+            self.logger.emit("ledger", **snap.as_dict())
+
     def set_exposure(self, category: str, notional: float) -> None:
         self.metrics.exposure.labels(category=category).set(notional)
 
@@ -337,23 +350,21 @@ class Observability:
         broker = getattr(pipe, "broker", None)
         clock = getattr(pipe, "clock", None)
         kills = getattr(pipe, "kills", None)
-        starting = float(self.config.trading.paper_starting_cash)
-        equity = starting
-        realized = 0.0
-        daily = 0.0
-        drawdown = 0.0
-        if risk is not None:
+        ledger = getattr(pipe, "ledger", None)
+        if ledger is not None:
+            self.publish_ledger(ledger.snapshot())
+        elif risk is not None:
             realized = float(risk.state.session_pnl)
             daily = float(risk.state.daily_pnl)
-            equity = starting + realized
+            equity = float(self.config.trading.paper_starting_cash) + realized
             if broker is not None:
                 equity = float(broker.cash)
             peak = float(risk.state.peak_equity) or equity
-            if peak > 0:
-                drawdown = max(0.0, (peak - float(risk.state.equity)) / peak)
+            drawdown = max(0.0, (peak - float(risk.state.equity)) / peak) if peak > 0 else 0.0
+            self.set_equity_pnl(equity=equity, realized=realized, daily=daily, drawdown=drawdown)
+        if risk is not None:
             for category, notional in risk.state.category_exposure.items():
                 self.set_exposure(str(category), float(notional))
-        self.set_equity_pnl(equity=equity, realized=realized, daily=daily, drawdown=drawdown)
         if kills is not None:
             self.health.kill_switch = bool(kills.tripped)
             self.health.kill_reason = kills.reason.value if kills.reason else None

@@ -7,16 +7,32 @@ from datetime import UTC, datetime
 
 from hotflow.config import TradingConfig
 from hotflow.execution.orders import OrderStateMachine
+from hotflow.portfolio.ledger import LedgerEvent, PaperLedger
 from hotflow.reason_codes import ReasonCode
-from hotflow.types import Opportunity, OrderRecord, OrderStatus, Side, TradingMode
+from hotflow.types import Opportunity, OrderRecord, OrderStatus, TradingMode
 
 
 class PaperBroker:
-    def __init__(self, trading: TradingConfig) -> None:
+    def __init__(self, trading: TradingConfig, ledger: PaperLedger | None = None) -> None:
         self.trading = trading
         self.orders: dict[str, OrderRecord] = {}
-        self.cash = trading.paper_starting_cash
-        self.positions: dict[str, float] = {}
+        self.ledger = ledger or PaperLedger(
+            starting_cash=trading.paper_starting_cash,
+            session_id=trading.session_id,
+        )
+        self.last_fill_event: LedgerEvent | None = None
+
+    @property
+    def cash(self) -> float:
+        return self.ledger.cash
+
+    @cash.setter
+    def cash(self, value: float) -> None:
+        self.ledger.cash = float(value)
+
+    @property
+    def positions(self) -> dict[str, float]:
+        return {token: pos.qty for token, pos in self.ledger.positions.items() if abs(pos.qty) > 1e-12}
 
     def create(
         self,
@@ -50,7 +66,13 @@ class PaperBroker:
         sm.transition(OrderStatus.ACKNOWLEDGED)
         return sm.order
 
-    def simulate_fill(self, client_order_id: str, *, fill_ratio: float | None = None) -> OrderRecord:
+    def simulate_fill(
+        self,
+        client_order_id: str,
+        *,
+        fill_ratio: float | None = None,
+        fee_per_share: float = 0.0,
+    ) -> OrderRecord:
         """Fill from the simulator only — never from book disappearance."""
         order = self.orders[client_order_id]
         sm = OrderStateMachine(order)
@@ -61,12 +83,21 @@ class PaperBroker:
         ratio = self.trading.paper_fill_ratio if fill_ratio is None else fill_ratio
         remaining = order.size - order.filled_size
         fill = remaining * max(0.0, min(1.0, ratio))
+        self.last_fill_event = None
         if fill <= 0:
             return order
         sm.apply_fill(fill, order.price)
-        signed = fill if order.side == Side.BUY else -fill
-        self.positions[order.token_id] = self.positions.get(order.token_id, 0.0) + signed
-        self.cash -= signed * order.price
+        fee = abs(fill) * max(0.0, fee_per_share)
+        self.last_fill_event = self.ledger.apply_fill(
+            token_id=order.token_id,
+            market_id=order.market_id,
+            side=order.side,
+            size=fill,
+            price=order.avg_fill_price or order.price,
+            fee=fee,
+            client_order_id=client_order_id,
+            note="paper_fill",
+        )
         order.updated_at = datetime.now(UTC)
         return order
 
